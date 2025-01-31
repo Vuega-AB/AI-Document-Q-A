@@ -9,11 +9,9 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from langdetect import detect
 import json
-from google.ai import generativelanguage as glm
-import google.generativeai as genai
+import openai
 
 # Initialize models and configurations
-MODEL_NAME = "models/embedding-001"
 INDEX_FILE = "faiss_index.index"
 CONFIG_FILE = "app_config.json"
 
@@ -40,14 +38,19 @@ def extract_text_from_pdf(file):
     return text
 
 def process_pdf(file):
-    # Extract text from the uploaded PDF file
     text = extract_text_from_pdf(file)
-    # Split the text into manageable chunks of 2000 characters
+    print("Original text length:", len(text))
+    
+    # Create chunks of 2000 characters
     chunks = [text[i:i+2000] for i in range(0, len(text), 2000)]  
+    
+    print("Total chunks:", len(chunks))
+    print(chunks)
     st.session_state.config["text_chunks"].extend(chunks)
-    # Update vector database with all text chunks
     update_vector_db(chunks)  
+    print("Total chunks in session:",len(st.session_state.config["text_chunks"]))
     return chunks
+
 
 # Vector Database Functions
 def initialize_vector_db():
@@ -61,9 +64,7 @@ def initialize_vector_db():
 embedding_model, faiss_index = initialize_vector_db()
 
 def update_vector_db(texts):
-    # Generate embeddings for the provided text chunks
     embeddings = embedding_model.encode(texts)
-    # Add the embeddings to the FAISS index
     faiss_index.add(np.array(embeddings).astype("float32"))
     faiss.write_index(faiss_index, INDEX_FILE)
 
@@ -77,23 +78,27 @@ def load_config():
         with open(CONFIG_FILE, "r") as f:
             st.session_state.config = json.load(f)
 
-# Gemini Integration
+
 def generate_response(prompt, context):
-    model = genai.GenerativeModel("gemini-1.5-flash")
     try:
-        response = model.generate_content(
-            f"{st.session_state.config['system_prompt']}\n\nContext: {context}\n\nQuestion: {prompt}",
-            generation_config={
-                "temperature": st.session_state.config["temperature"],
-                "top_p": st.session_state.config["top_p"]
-            }
+        max_context_tokens = 6000  # Leave room for the prompt and system message
+        truncated_context = context[:max_context_tokens]
+        
+        response = openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "developer", "content": st.session_state.config["system_prompt"]},
+                {"role": "user", "content": f"Context: {truncated_context}\n\nQuestion: {prompt}"}
+            ],
+            temperature=st.session_state.config["temperature"],
+            top_p=st.session_state.config["top_p"]
         )
-        return response.text
+        return response.choices[0].message.content
     except Exception as e:
         return f"Error generating response: {str(e)}"
 
 # RAG Pipeline
-def retrieve_context(query, top_k=15):  # Increased top_k to include more relevant chunks
+def retrieve_context(query, top_k=3):
     query_embedding = embedding_model.encode([query])
     distances, indices = faiss_index.search(query_embedding, top_k)
     valid_indices = [i for i in indices[0] if i < len(st.session_state.config["text_chunks"])]
@@ -103,24 +108,20 @@ def retrieve_context(query, top_k=15):  # Increased top_k to include more releva
 def get_pdfs_from_url(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.content, "html.parser")
-    pdf_links = []
-    for link in soup.find_all("a"):
-        href = link.get("href")
-        if href and href.endswith(".pdf"):
-            pdf_links.append(href)
+    pdf_links = [link.get("href") for link in soup.find_all("a") if link.get("href") and link.get("href").endswith(".pdf")]
     return pdf_links
 
 # Streamlit UI
-st.title("📄 AI Document Q&A with Gemini")
+st.title("📄 AI Document Q&A with OpenAI GPT-4")
 
 # Sidebar Configuration
 with st.sidebar:
     st.header("Configuration")
     
     # API Key
-    api_key = st.text_input("Gemini API Key", type="password")
+    api_key = st.text_input("OpenAI API Key", type="password")
     if api_key:
-        genai.configure(api_key=api_key)
+        openai.api_key = api_key
     
     # Model Settings
     st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, 0.7)
@@ -145,17 +146,22 @@ if url_input:
         if st.button(f"Process {link.split('/')[-1]}"):
             response = requests.get(link)
             with io.BytesIO(response.content) as pdf_file:
-                chunks = process_pdf(pdf_file)
+                process_pdf(pdf_file)
                 st.session_state.config["stored_pdfs"].append(link)
                 st.success("PDF processed successfully!")
 
 # Process Uploaded Files
 if uploaded_files:
     for file in uploaded_files:
-        with io.BytesIO(file.getvalue()) as pdf_file:
-            chunks = process_pdf(pdf_file)
-            st.session_state.config["stored_pdfs"].append(file.name)
-    st.success(f"Processed {len(uploaded_files)} files")
+        file_name = file.name
+        # Check if the file has already been processed
+        if file_name not in st.session_state.config["stored_pdfs"]: # use hash instead of name
+            with io.BytesIO(file.getvalue()) as pdf_file:
+                process_pdf(pdf_file)
+                st.session_state.config["stored_pdfs"].append(file_name)
+            st.success(f"Processed '{file_name}'")
+        # else:
+        #     st.info(f"File '{file_name}' has already been processed.")
 
 # Debugging: Check total stored chunks
 st.sidebar.write(f"Total text chunks stored: {len(st.session_state.config['text_chunks'])}")
@@ -167,28 +173,19 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 if prompt := st.chat_input("Ask a question (English/Swedish)"):
-    # Detect language
     try:
         lang = detect(prompt)
     except:
         lang = "en"
-    
-    # Retrieve context
+    print(prompt)
     context_indices = retrieve_context(prompt)
-    if not context_indices:
-        context = "No relevant context found."
-    else:
-        context = " ".join([st.session_state.config["text_chunks"][i] for i in context_indices])
-        
-        # If context is too short, add more chunks from start
-        if len(context) < 500:
-            context += " ".join(st.session_state.config["text_chunks"][:3])  
-
-    # Generate response
+    print(f"indeses {context_indices}")
+    context = " ".join([st.session_state.config["text_chunks"][i] for i in context_indices]) if context_indices else "No relevant context found."
+    print(len(context))
+    print(context)
     with st.spinner("Generating response..."):
         response = generate_response(prompt, context)
     
-    # Display messages
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.session_state.messages.append({"role": "assistant", "content": response})
     
