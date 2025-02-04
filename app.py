@@ -85,7 +85,7 @@ def generate_response(prompt, context):
         truncated_context = context[:max_context_tokens]
         
         response = openai.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "developer", "content": st.session_state.config["system_prompt"]},
                 {"role": "user", "content": f"Context: {truncated_context}\n\nQuestion: {prompt}"}
@@ -112,7 +112,7 @@ def get_pdfs_from_url(url):
     return pdf_links
 
 # Streamlit UI
-st.title("📄 AI Document Q&A with OpenAI GPT-4")
+st.title("📄 AI Document Q&A with OpenAI GPT-4o")
 
 # Sidebar Configuration
 with st.sidebar:
