@@ -4,7 +4,9 @@ beautifulsoup4
 PyPDF2
 faiss-cpu
 numpy
-sentence-transformers
+sentence_transformers
 langdetect
 google-generativeai
 python-dotenv
+together
+torch
