@@ -20,6 +20,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Initialize models and configurations
 INDEX_FILE = "faiss_index.index"
 CONFIG_FILENAME = "config.json"
+TEXT_FILE = "text_store.json"
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -51,28 +52,56 @@ def process_pdf(file):
     chunks = [text[i:i+2000] for i in range(0, len(text), 2000)]  
     
     print("Total chunks:", len(chunks))
-    print(chunks)
-    st.session_state.config["text_chunks"].extend(chunks)
-    update_vector_db(chunks)  
-    print("Total chunks in session:",len(st.session_state.config["text_chunks"]))
+    update_vector_db(chunks) 
     return chunks
 
 
-# Vector Database Functions
 def initialize_vector_db():
     model = SentenceTransformer("all-MiniLM-L6-v2")
+    
+    # Load FAISS index if exists
     if os.path.exists(INDEX_FILE):
         index = faiss.read_index(INDEX_FILE)
     else:
-        index = faiss.IndexFlatL2(384)
-    return model, index
+        index = faiss.IndexFlatL2(384)  # 384-dimensional vectors
+    
+    # Load text mappings if exists
+    if os.path.exists(TEXT_FILE):
+        with open(TEXT_FILE, "r", encoding="utf-8") as f:
+            text_store = json.load(f)
+    else:
+        text_store = {}
 
-embedding_model, faiss_index = initialize_vector_db()
+    return model, index, text_store
 
+embedding_model, faiss_index, text_store = initialize_vector_db()
+
+# Function to update the FAISS index and store text mappings
 def update_vector_db(texts):
+    global text_store
+    
     embeddings = embedding_model.encode(texts)
-    faiss_index.add(np.array(embeddings).astype("float32"))
+    embeddings = np.array(embeddings).astype("float32")
+
+    # Add embeddings to FAISS index
+    start_idx = len(text_store)  # Get the starting index for new texts
+    faiss_index.add(embeddings)
+
+    # Store text with corresponding index
+    for i, text in enumerate(texts):
+        text_store[start_idx + i] = text
+
+    # Save FAISS index
     faiss.write_index(faiss_index, INDEX_FILE)
+
+    # Save text mappings
+    with open(TEXT_FILE, "w", encoding="utf-8") as f:
+        json.dump(text_store, f, ensure_ascii=False, indent=4)
+
+# Function to retrieve text given an index
+def get_text_by_index(idx):
+    return text_store.get(str(idx), "Text not found")
+
 
 # Function to save config as a downloadable JSON file
 def save_config(config):
@@ -113,8 +142,15 @@ def generate_response(prompt, context):
 def retrieve_context(query, top_k=3):
     query_embedding = embedding_model.encode([query])
     distances, indices = faiss_index.search(query_embedding, top_k)
-    valid_indices = [i for i in indices[0] if i < len(st.session_state.config["text_chunks"])]
-    return valid_indices
+    print(indices)
+    # Convert indices to string and filter valid ones
+    valid_indices = [str(i) for i in indices[0] if i != -1 and str(i) in text_store]
+
+    # Retrieve the corresponding text chunks
+    retrieved_texts = [text_store[idx] for idx in valid_indices]
+
+    return "\n\n".join(retrieved_texts) if retrieved_texts else "No relevant context found."
+
 
 # URL Processing
 def get_pdfs_from_url(url):
@@ -201,10 +237,9 @@ if prompt := st.chat_input("Ask a question (English/Swedish)"):
     except:
         lang = "en"
         
-    context_indices = retrieve_context(prompt)
-    context = " ".join([st.session_state.config["text_chunks"][i] for i in context_indices]) if context_indices else "No relevant context found."
+    context = retrieve_context(prompt)
     
-    
+    print(context)
     with st.spinner("Generating response..."):
         response = generate_response(prompt, context)
     
