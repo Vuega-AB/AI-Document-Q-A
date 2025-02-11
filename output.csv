@@ -1,0 +1,61 @@
+Model Size,Model Type,Lite Price,Turbo Price,Model,Variant,Price
+MODEL SIZE,type,Unknown Price,Unknown Price,,,
+Up to 3B,Text,Unknown Price,$0.06,,,
+8B,Text,$0.10,$0.18,,,
+11B,Vision,Unknown Price,$0.18,,,
+70B,Text,$0.54,$0.88,,,
+90B,Vision,Unknown Price,$1.20,,,
+405B,Text,Unknown Price,$3.50,,,
+,,,,DeepSeek MODELS,Model,Unknown Price
+,,,,DeepSeek MODELS,DeepSeek-V3,$1.25
+,,,,DeepSeek MODELS,DeepSeek-R1,$7.00
+,,,,DeepSeek MODELS,Deepseek-R1-Distill-Llama-70B,$2.00
+,,,,DeepSeek MODELS,Deepseek-R1-Distill-Qwen-14B,$1.60
+,,,,DeepSeek MODELS,Deepseek-R1-Distill-Qwen-1.5B,$0.18
+,,,,DeepSeek MODELS,DeepSeek LLM Chat 67B,$0.90
+,,,,Qwen models,Model,Unknown Price
+,,,,Qwen models,Qwen 2 72B,$0.90
+,,,,Qwen models,Qwen 2-VL-72B,$1.20
+,,,,Qwen models,Qwen 2.5 7B,$0.30
+,,,,Qwen models,Qwen 2.5 14B,$0.80
+,,,,Qwen models,Qwen 2.5 72B,$1.20
+,,,,Qwen models,Qwen 2.5 Coder 32B,$0.80
+,,,,Qwen models,Qwen QwQ 32B Preview,$1.20
+,,,,"ALLÂ OTHERÂ CHat, language, code and moderation models",Model size,Unknown Price
+,,,,"ALLÂ OTHERÂ CHat, language, code and moderation models",Up to 4B,$0.10
+,,,,"ALLÂ OTHERÂ CHat, language, code and moderation models",4.1B - 8B,$0.20
+,,,,"ALLÂ OTHERÂ CHat, language, code and moderation models",8.1B - 21B,$0.30
+,,,,"ALLÂ OTHERÂ CHat, language, code and moderation models",21.1B - 41B,$0.80
+,,,,"ALLÂ OTHERÂ CHat, language, code and moderation models",41.1B - 80B,$0.90
+,,,,"ALLÂ OTHERÂ CHat, language, code and moderation models",80.1B - 110B,$1.80
+,,,,Mixture-of-experts,Model size,Unknown Price
+,,,,Mixture-of-experts,Up to 56B total parameters,$0.60
+,,,,Mixture-of-experts,56.1B - 176B total parameters,$1.20
+,,,,Mixture-of-experts,176.1B - 480B total parameters,$2.40
+,,,,FLUXÂ Image models,Model,Unknown Price
+,,,,FLUXÂ Image models,FLUX.1 [dev],$0.025
+,,,,FLUXÂ Image models,FLUX.1 [dev] lora,$0.035
+,,,,FLUXÂ Image models,FLUX.1 [schnell],$0.0027
+,,,,FLUXÂ Image models,FLUX1.1 [pro],$0.04
+,,,,FLUXÂ Image models,FLUX.1 [pro],$0.05
+,,,,FLUXÂ Image models,FLUX.1 Canny [dev],$0.025
+,,,,FLUXÂ Image models,FLUX.1 Depth [dev],$0.025
+,,,,FLUXÂ Image models,FLUX.1 Redux [dev],$0.025
+,,,,STABILITYÂ IMAGEÂ MODELS,Image Size,Unknown Price
+,,,,STABILITYÂ IMAGEÂ MODELS,512X512,$0.001
+,,,,STABILITYÂ IMAGEÂ MODELS,1024X1024,$0.01
+,,,,AUDIOÂ MODELS,Model,Unknown Price
+,,,,AUDIOÂ MODELS,Cartesia Sonic,$65.00
+,,,,EMbeddings models,Model size,Unknown Price
+,,,,EMbeddings models,Up to 150M,$0.008
+,,,,EMbeddings models,151M - 350M,$0.016
+,,,,rerank models,Model size,Unknown Price
+,,,,rerank models,8B,$0.10
+,,,,Your fine-tuned models,hardware type,Unknown Price
+,,,,Your fine-tuned models,1x RTX-6000 48GB,$0.034
+,,,,Your fine-tuned models,1x L40 48GB,$0.034
+,,,,Your fine-tuned models,1x L40S 48GB,$0.048
+,,,,Your fine-tuned models,1x A100 PCIe 80GB,$0.050
+,,,,Your fine-tuned models,1x A100 SXM 40GB,$0.050
+,,,,Your fine-tuned models,1x A100 SXM 80GB,$0.054
+,,,,Your fine-tuned models,1x H100 80GB,$0.098
