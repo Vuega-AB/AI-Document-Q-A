@@ -148,7 +148,7 @@ with st.sidebar:
 
 
 # File Uploader for PDFs
-st.sidebar.header("Upload PDFs")
+st.header("Upload PDFs")
 pdf_files = st.file_uploader("Upload PDF documents", type=["pdf"], accept_multiple_files=True)
 if pdf_files:
     for pdf_file in pdf_files:
