@@ -36,7 +36,9 @@ if "config" not in st.session_state:
         "system_prompt": "You are a helpful assistant. Answer questions based on the provided context.",
         "stored_pdfs": [],
         "text_chunks": [],
-        "selected_models": AVAILABLE_MODELS[:3]  # Default to first three models
+        "selected_models": AVAILABLE_MODELS[:3],  # Default to first three models
+        "vary_temperature": True,
+        "vary_top_p": False
     }
 
 # Function to save config as a downloadable JSON file
@@ -104,7 +106,7 @@ def process_pdf(file):
     return chunks
 
 # Together.AI Integration
-def generate_response(prompt, context, model):
+def generate_response(prompt, context, model, temp, top_p):
     try:
         response = client.chat.completions.create(
             model=model,
@@ -112,8 +114,8 @@ def generate_response(prompt, context, model):
                 {"role": "system", "content": f"{st.session_state.config['system_prompt']}"},
                 {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
             ],
-            temperature=st.session_state.config["temperature"],
-            top_p=st.session_state.config["top_p"]
+            temperature=temp,
+            top_p=top_p
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -133,15 +135,17 @@ st.title("📄 AI Document Q&A with Together.AI")
 with st.sidebar:
     st.header("Configuration")
     st.session_state.config["selected_models"] = st.multiselect("Select AI Models (Up to 3)", AVAILABLE_MODELS, default=AVAILABLE_MODELS[:3])
-    st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, st.session_state.config.get("temperature", 0.7))
-    st.session_state.config["top_p"] = st.slider("Top-p Sampling", 0.0, 1.0, st.session_state.config.get("top_p", 0.9))
-    st.session_state.config["system_prompt"] = st.text_area("System Prompt", value=st.session_state.config.get("system_prompt", ""))
+    st.session_state.config["vary_temperature"] = st.checkbox("Vary Temperature", value=True)
+    st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
+    st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, st.session_state.config["temperature"], 0.05)
+    st.session_state.config["top_p"] = st.slider("Top-P", 0.0, 1.0, st.session_state.config["top_p"], 0.05)
     config_file = st.file_uploader("Upload Configuration", type=['json'])
     if config_file:
         load_config(config_file)
     if st.button("Update and Download Configuration"):
         config_bytes = save_config(st.session_state.config)
         st.download_button("Download Config", data=config_bytes, file_name="config.json", mime="application/json")
+
 
 # File Uploader for PDFs
 st.sidebar.header("Upload PDFs")
@@ -159,8 +163,13 @@ if prompt := st.chat_input("Ask a question"):
     
     tabs = st.tabs([model.split("/")[-1] for model in st.session_state.config["selected_models"]])
     
+    temp_values = [0, st.session_state.config["temperature"] / 3, st.session_state.config["temperature"]]
+    top_p_values = [0, st.session_state.config["top_p"] / 3, st.session_state.config["top_p"]]
+    
     for tab, model in zip(tabs, st.session_state.config["selected_models"]):
         with tab:
-            with st.spinner(f"Generating response from {model}..."):
-                response = generate_response(prompt, context, model)
-            st.markdown(response)
+            for temp in temp_values if st.session_state.config["vary_temperature"] else [st.session_state.config["temperature"]]:
+                for top_p in top_p_values if st.session_state.config["vary_top_p"] else [st.session_state.config["top_p"]]:
+                    with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
+                        response = generate_response(prompt, context, model, temp, top_p)
+                    st.markdown(f"**Temp={temp}, Top-P={top_p}:** {response}")
