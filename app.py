@@ -12,15 +12,21 @@ import json
 import openai
 from io import BytesIO  # For handling file download
 from dotenv import load_dotenv
+import dropbox
 
 # Load environment variables
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+DROPBOX_TOKEN=os.getenv("DROPBOX_TOKEN")
 # Initialize models and configurations
 INDEX_FILE = "faiss_index.index"
 CONFIG_FILENAME = "config.json"
 TEXT_FILE = "text_store.json"
+FOLDER_PATH_DROPBOX = "/AI-QA"
+INDEX_FILE_PATH_DROPBOX = f"{FOLDER_PATH_DROPBOX}/{INDEX_FILE}"
+TEXT_FILE_PATH_DROPBOX = f"{FOLDER_PATH_DROPBOX}/{TEXT_FILE}"
+
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -33,6 +39,60 @@ if "config" not in st.session_state:
         "stored_pdfs": [],
         "text_chunks": []
     }
+
+def initialize_dropbox():
+    try:
+        dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+        return dbx
+    except Exception as e:
+        st.error(f"Error connecting to Dropbox: {e}")
+        return None
+
+dbx = initialize_dropbox()
+
+
+def initialize_and_load_data():
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    try:
+        # Attempt to download and load FAISS index and text store from Dropbox
+        with open(INDEX_FILE, "wb") as f_index:  # Use f_index for clarity
+            metadata_index, res_index = dbx.files_download(path=INDEX_FILE_PATH_DROPBOX)
+            f_index.write(res_index.content)
+
+        with open(TEXT_FILE, "wb") as f_text: # Use f_text for clarity
+            metadata_text, res_text = dbx.files_download(path=TEXT_FILE_PATH_DROPBOX)
+            f_text.write(res_text.content)
+        
+        with open(TEXT_FILE, "r", encoding="utf-8") as f_text:
+            text_store = json.load(f_text)
+        
+        index = faiss.read_index(INDEX_FILE)  # Load the index
+        st.info("Data loaded from Dropbox.")
+
+    except (dropbox.exceptions.ApiError, FileNotFoundError):  # Handle file not found or other dropbox errors
+        st.info("No existing data found in Dropbox. Initializing new index.")
+        index = faiss.IndexFlatL2(384)  # Create a new index
+        text_store = {}  # Initialize an empty text store
+
+    return model, index, text_store
+
+embedding_model, faiss_index, text_store = initialize_and_load_data()
+
+
+def save_data_to_dropbox():
+    try:
+        with open(INDEX_FILE, "rb") as f:
+            dbx.files_upload(f.read(), INDEX_FILE_PATH_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
+        with open(TEXT_FILE, "w", encoding="utf-8") as f:
+            json.dump(text_store, f, ensure_ascii=False, indent=4)
+        with open(TEXT_FILE, "rb") as f:
+            dbx.files_upload(f.read(), TEXT_FILE_PATH_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
+
+        st.success("Data saved to Dropbox.")
+    except Exception as e:
+        st.error(f"Error saving data to Dropbox: {e}")
+
 
 # PDF Processing Functions
 def extract_text_from_pdf(file):
@@ -52,29 +112,10 @@ def process_pdf(file):
     chunks = [text[i:i+2000] for i in range(0, len(text), 2000)]  
     
     print("Total chunks:", len(chunks))
-    update_vector_db(chunks) 
+    update_vector_db(chunks)
+    save_data_to_dropbox()
     return chunks
 
-
-def initialize_vector_db():
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    
-    # Load FAISS index if exists
-    if os.path.exists(INDEX_FILE):
-        index = faiss.read_index(INDEX_FILE)
-    else:
-        index = faiss.IndexFlatL2(384)  # 384-dimensional vectors
-    
-    # Load text mappings if exists
-    if os.path.exists(TEXT_FILE):
-        with open(TEXT_FILE, "r", encoding="utf-8") as f:
-            text_store = json.load(f)
-    else:
-        text_store = {}
-
-    return model, index, text_store
-
-embedding_model, faiss_index, text_store = initialize_vector_db()
 
 # Function to update the FAISS index and store text mappings
 def update_vector_db(texts):
