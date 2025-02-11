@@ -13,19 +13,19 @@ import openai
 from io import BytesIO  # For handling file download
 from dotenv import load_dotenv
 import dropbox
+import hashlib
+
 
 # Load environment variables
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-
 DROPBOX_TOKEN=os.getenv("DROPBOX_TOKEN")
+
 # Initialize models and configurations
 INDEX_FILE = "faiss_index.index"
 CONFIG_FILENAME = "config.json"
-TEXT_FILE = "text_store.json"
-FOLDER_PATH_DROPBOX = "/AI-QA"
-INDEX_FILE_PATH_DROPBOX = f"{FOLDER_PATH_DROPBOX}/{INDEX_FILE}"
-TEXT_FILE_PATH_DROPBOX = f"{FOLDER_PATH_DROPBOX}/{TEXT_FILE}"
+INDEX_FILE_DROPBOX = "/faiss_index.index"  # Path on Dropbox
+TEXT_FILE_DROPBOX = "/text_store.json"  # Path on Dropbox
 
 
 # Initialize session state
@@ -53,29 +53,26 @@ dbx = initialize_dropbox()
 
 def initialize_and_load_data():
     model = SentenceTransformer("all-MiniLM-L6-v2")
+    index = faiss.IndexFlatL2(384)  # Initialize a new index (in memory)
+    text_store = {}
 
     try:
-        # Attempt to download and load FAISS index and text store from Dropbox
         with open(INDEX_FILE, "wb") as f_index:  # Use f_index for clarity
-            metadata_index, res_index = dbx.files_download(path=INDEX_FILE_PATH_DROPBOX)
+            metadata_index, res_index = dbx.files_download(path=INDEX_FILE_DROPBOX)
             f_index.write(res_index.content)
+        index = faiss.read_index(INDEX_FILE)
 
-        with open(TEXT_FILE, "wb") as f_text: # Use f_text for clarity
-            metadata_text, res_text = dbx.files_download(path=TEXT_FILE_PATH_DROPBOX)
-            f_text.write(res_text.content)
+        # Load text store from Dropbox directly into memory
+        metadata_text, res_text = dbx.files_download(path=TEXT_FILE_DROPBOX)
+        text_store = json.loads(res_text.content.decode('utf-8')) # decode bytes to string before parsing json
         
-        with open(TEXT_FILE, "r", encoding="utf-8") as f_text:
-            text_store = json.load(f_text)
-        
-        index = faiss.read_index(INDEX_FILE)  # Load the index
         st.info("Data loaded from Dropbox.")
-
-    except (dropbox.exceptions.ApiError, FileNotFoundError):  # Handle file not found or other dropbox errors
+        
+    except dropbox.exceptions.ApiError:
         st.info("No existing data found in Dropbox. Initializing new index.")
-        index = faiss.IndexFlatL2(384)  # Create a new index
-        text_store = {}  # Initialize an empty text store
 
     return model, index, text_store
+
 
 embedding_model, faiss_index, text_store = initialize_and_load_data()
 
@@ -83,11 +80,11 @@ embedding_model, faiss_index, text_store = initialize_and_load_data()
 def save_data_to_dropbox():
     try:
         with open(INDEX_FILE, "rb") as f:
-            dbx.files_upload(f.read(), INDEX_FILE_PATH_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
-        with open(TEXT_FILE, "w", encoding="utf-8") as f:
-            json.dump(text_store, f, ensure_ascii=False, indent=4)
-        with open(TEXT_FILE, "rb") as f:
-            dbx.files_upload(f.read(), TEXT_FILE_PATH_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
+            dbx.files_upload(f.read(), INDEX_FILE_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
+
+        # Save text store directly to Dropbox
+        text_json = json.dumps(text_store, ensure_ascii=False, indent=4).encode('utf-8')
+        dbx.files_upload(text_json, TEXT_FILE_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
 
         st.success("Data saved to Dropbox.")
     except Exception as e:
@@ -120,24 +117,17 @@ def process_pdf(file):
 # Function to update the FAISS index and store text mappings
 def update_vector_db(texts):
     global text_store
-    
     embeddings = embedding_model.encode(texts)
     embeddings = np.array(embeddings).astype("float32")
 
-    # Add embeddings to FAISS index
-    start_idx = len(text_store)  # Get the starting index for new texts
+    start_idx = len(text_store)
     faiss_index.add(embeddings)
 
-    # Store text with corresponding index
     for i, text in enumerate(texts):
-        text_store[start_idx + i] = text
+        text_store[str(start_idx + i)] = text  #Store keys as string for consistency
 
     # Save FAISS index
     faiss.write_index(faiss_index, INDEX_FILE)
-
-    # Save text mappings
-    with open(TEXT_FILE, "w", encoding="utf-8") as f:
-        json.dump(text_store, f, ensure_ascii=False, indent=4)
 
 # Function to retrieve text given an index
 def get_text_by_index(idx):
@@ -255,16 +245,14 @@ if uploaded_files:
     for file in uploaded_files:
         file_name = file.name
         # Check if the file has already been processed
-        if file_name not in st.session_state.config["stored_pdfs"]: # use hash instead of name
+        file_hash = hashlib.md5(file.getvalue()).hexdigest()
+        if file_hash not in st.session_state.config["stored_pdfs"]:
             with io.BytesIO(file.getvalue()) as pdf_file:
                 process_pdf(pdf_file)
-                st.session_state.config["stored_pdfs"].append(file_name)
+                st.session_state.config["stored_pdfs"].append(file_hash)
             st.success(f"Processed '{file_name}'")
-        # else:
-        #     st.info(f"File '{file_name}' has already been processed.")
-
-# Debugging: Check total stored chunks
-st.sidebar.write(f"Total text chunks stored: {len(st.session_state.config['text_chunks'])}")
+        else:
+            st.info(f"File '{file_name}' has already been processed.")
 
 # Chat Interface
 st.header("Chat with Documents")
