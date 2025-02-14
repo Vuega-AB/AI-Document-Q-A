@@ -29,13 +29,15 @@ TEXT_FILE_DROPBOX = "/text_store.json"  # Path on Dropbox
 
 
 # Initialize session state
+# if "file_uploader_key" not in st.session_state:
+#     st.session_state.file_uploader_key = 0
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "config" not in st.session_state:
     st.session_state.config = {
         "temperature": 0.7,
         "top_p": 0.9,
-        "system_prompt": "You are a helpful assistant. Answer questions based on the provided context.",
+        "system_prompt": "You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.'",
         "stored_pdfs": [],
         "text_chunks": []
     }
@@ -101,22 +103,17 @@ def extract_text_from_pdf(file):
             text += page_text + "\n"
     return text
 
-def process_pdf(file):
+def process_pdf(file, file_name, file_hash):
     text = extract_text_from_pdf(file)
-    print("Original text length:", len(text))
-    
-    # Create chunks of 2000 characters
-    chunks = [text[i:i+2000] for i in range(0, len(text), 2000)]  
-    
-    print("Total chunks:", len(chunks))
-    update_vector_db(chunks)
+    chunks = [text[i:i + 2000] for i in range(0, len(text), 2000)]
+    update_vector_db(chunks, file_name, file_hash)  # Pass file_hash as well
     save_data_to_dropbox()
     return chunks
 
 
 # Function to update the FAISS index and store text mappings
-def update_vector_db(texts):
-    global text_store
+def update_vector_db(texts, file_name, file_hash):
+    global text_store, faiss_index
     embeddings = embedding_model.encode(texts)
     embeddings = np.array(embeddings).astype("float32")
 
@@ -124,14 +121,16 @@ def update_vector_db(texts):
     faiss_index.add(embeddings)
 
     for i, text in enumerate(texts):
-        text_store[str(start_idx + i)] = text  #Store keys as string for consistency
+        text_store[str(start_idx + i)] = {
+            "text": text,
+            "file_name": file_name,
+            "file_hash": file_hash  # Store the pre-calculated hash
+        }
 
     # Save FAISS index
     faiss.write_index(faiss_index, INDEX_FILE)
 
-# Function to retrieve text given an index
-def get_text_by_index(idx):
-    return text_store.get(str(idx), "Text not found")
+
 
 
 # Function to save config as a downloadable JSON file
@@ -171,24 +170,48 @@ def generate_response(prompt, context):
 
 # RAG Pipeline
 def retrieve_context(query, top_k=3):
+    global text_store, faiss_index
     query_embedding = embedding_model.encode([query])
     distances, indices = faiss_index.search(query_embedding, top_k)
-    print(indices)
-    # Convert indices to string and filter valid ones
     valid_indices = [str(i) for i in indices[0] if i != -1 and str(i) in text_store]
-
-    # Retrieve the corresponding text chunks
-    retrieved_texts = [text_store[idx] for idx in valid_indices]
-
+    retrieved_texts = [text_store[idx]["text"] for idx in valid_indices]  # Access text from dict
     return "\n\n".join(retrieved_texts) if retrieved_texts else "No relevant context found."
 
+def delete_pdf(file_hash):
+    global text_store, faiss_index
+
+    try:
+        indices_to_remove = []
+        for key, value in text_store.items():
+            if value["file_hash"] == file_hash:
+                indices_to_remove.append(int(key))
+
+        for index in sorted(indices_to_remove, reverse=True):
+            del text_store[str(index)]
+
+        texts = [item["text"] for item in text_store.values()]
+        if texts:
+            embeddings = embedding_model.encode(texts)
+            embeddings = np.array(embeddings).astype("float32")
+            faiss_index = faiss.IndexFlatL2(384)
+            faiss_index.add(embeddings)
+        else:
+            faiss_index = faiss.IndexFlatL2(384)
+
+        faiss.write_index(faiss_index, INDEX_FILE)
+
+        save_data_to_dropbox()
+        st.success(f"PDF file deleted successfully!")
+
+    except Exception as e:
+        st.error(f"Error deleting PDF: {e}")
 
 # URL Processing
-def get_pdfs_from_url(url):
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, "html.parser")
-    pdf_links = [link.get("href") for link in soup.find_all("a") if link.get("href") and link.get("href").endswith(".pdf")]
-    return pdf_links
+# def get_pdfs_from_url(url):
+#     response = requests.get(url)
+#     soup = BeautifulSoup(response.content, "html.parser")
+#     pdf_links = [link.get("href") for link in soup.find_all("a") if link.get("href") and link.get("href").endswith(".pdf")]
+#     return pdf_links
 
 # Streamlit UI
 st.title("📄 AI Document Q&A with OpenAI GPT-4o")
@@ -196,11 +219,6 @@ st.title("📄 AI Document Q&A with OpenAI GPT-4o")
 # Sidebar Configuration
 with st.sidebar:
     st.header("Configuration")
-    
-    # API Key
-    # api_key = st.text_input("OpenAI API Key", type="password")
-    # if api_key:
-    #     openai.api_key = api_key
     
     # Model Settings
     st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, 0.7)
@@ -224,35 +242,82 @@ with st.sidebar:
             mime="application/json"
         )
 
+    st.header("Uploaded Documents")
+    if text_store:
+        # Get unique file hashes
+        unique_file_hashes = set(item["file_hash"] for item in text_store.values())  # Use a set for uniqueness
+
+        for file_hash in unique_file_hashes:  # Loop over unique hashes
+            file_name_to_display = "Unknown"
+            for item in text_store.values():  # Find a filename associated with the hash
+                if item["file_hash"] == file_hash:
+                    file_name_to_display = item["file_name"]
+                    break  # Stop searching once you find a filename
+
+            # if st.button(f"Delete '{file_name_to_display}'", key=file_hash):  # Key is still essential
+            #     delete_pdf(file_hash)
+            col1, col2 = st.columns([3, 1])  # Create two columns
+
+            with col1:  # Filename in the first column (non-clickable)
+                st.write(file_name_to_display)  # Use st.write for non-clickable text
+
+            with col2:  # Delete button in the second column
+                if st.button("🗑️", key=f"delete_{file_hash}"):  # Trash can icon, unique key
+                    delete_pdf(file_hash)
+                    st.success("File deleted and file uploader cleared.")  
+    else:
+        st.write("No documents uploaded yet.")
+
 # File Upload Section
 st.header("Document Management")
-uploaded_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True)
-url_input = st.text_input("Or enter URL to scan for PDFs")
+uploaded_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True) #,key=st.session_state.file_uploader_key)
+# url_input = st.text_input("Or enter URL to scan for PDFs")
 
-# Process URL PDFs
-if url_input:
-    pdf_links = get_pdfs_from_url(url_input)
-    for link in pdf_links:
-        if st.button(f"Process {link.split('/')[-1]}"):
-            response = requests.get(link)
-            with io.BytesIO(response.content) as pdf_file:
-                process_pdf(pdf_file)
-                st.session_state.config["stored_pdfs"].append(link)
-                st.success("PDF processed successfully!")
+# # Process URL PDFs
+# if url_input:
+#     pdf_links = get_pdfs_from_url(url_input)
+#     for link in pdf_links:
+#         if st.button(f"Process {link.split('/')[-1]}"):
+#             response = requests.get(link)
+#             with io.BytesIO(response.content) as pdf_file:
+#                 process_pdf(pdf_file)
+#                 st.session_state.config["stored_pdfs"].append(link)
+#                 st.success("PDF processed successfully!")
 
 # Process Uploaded Files
 if uploaded_files:
     for file in uploaded_files:
         file_name = file.name
+        unique_file_hashes = set(item["file_hash"] for item in text_store.values())
         # Check if the file has already been processed
         file_hash = hashlib.md5(file.getvalue()).hexdigest()
-        if file_hash not in st.session_state.config["stored_pdfs"]:
+        if file_hash not in unique_file_hashes: ##use the stored ones
             with io.BytesIO(file.getvalue()) as pdf_file:
-                process_pdf(pdf_file)
-                st.session_state.config["stored_pdfs"].append(file_hash)
+                process_pdf(pdf_file, file_name, file_hash)
             st.success(f"Processed '{file_name}'")
         else:
             st.info(f"File '{file_name}' has already been processed.")
+    # # **Reset File Uploader**
+    # st.session_state.file_uploader_key += 1
+    # # st.rerun()
+
+# st.header("Uploaded Documents")
+# if text_store:
+#     # Get unique file hashes
+#     unique_file_hashes = set(item["file_hash"] for item in text_store.values())  # Use a set for uniqueness
+
+#     for file_hash in unique_file_hashes:  # Loop over unique hashes
+#         file_name_to_display = "Unknown"
+#         for item in text_store.values():  # Find a filename associated with the hash
+#             if item["file_hash"] == file_hash:
+#                 file_name_to_display = item["file_name"]
+#                 break  # Stop searching once you find a filename
+
+#         if st.button(f"Delete '{file_name_to_display}'", key=file_hash):  # Key is still essential
+#             delete_pdf(file_hash)
+#             # st.session_state.file_uploader_key += 1
+# else:
+#     st.write("No documents uploaded yet.")
 
 # Chat Interface
 st.header("Chat with Documents")
