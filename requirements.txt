@@ -16,3 +16,4 @@ pdfplumber
 crawl4ai
 openai
 playwright
+!playwright install
