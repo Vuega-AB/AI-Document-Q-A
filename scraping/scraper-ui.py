@@ -10,11 +10,20 @@ from crawl4ai import AsyncWebCrawler
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 from openai import OpenAI
 import sys
+import subprocess
+
 
 # ----------------- Logging Setup -----------------
 logging.basicConfig(level=logging.INFO)
 
 # ----------------- Web Scraper Functions -----------------
+
+# Ensure Playwright browsers are installed
+try:
+    subprocess.run(["playwright", "install", "--with-deps"], check=True)
+except Exception as e:
+    print(f"Error installing Playwright: {e}")
+
 
 def get_page_items(url, base_url, listing_endpoint):
     """Extracts all item links from a page."""
