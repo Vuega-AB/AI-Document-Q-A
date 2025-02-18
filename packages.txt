@@ -1,0 +1,8 @@
+libgtk-3-0
+libgbm-dev
+libnss3
+libasound2
+libxshmfence1
+libxcomposite1
+libxrandr2
+libxi6
