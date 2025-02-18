@@ -4,35 +4,46 @@ from bs4 import BeautifulSoup
 import asyncio
 import aiohttp
 import pdfplumber
+import os
+import logging
 from crawl4ai import AsyncWebCrawler
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 from openai import OpenAI
 import sys
 
+# ----------------- Logging Setup -----------------
+logging.basicConfig(level=logging.INFO)
+
 # ----------------- Web Scraper Functions -----------------
 
 def get_page_items(url, base_url, listing_endpoint):
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-    if response.status_code != 200:
+    """Extracts all item links from a page."""
+    try:
+        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        if response.status_code != 200:
+            return []
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        items = set()
+
+        for item in soup.find_all("a"):
+            link = item.get("href")
+            title = item.text.strip()
+            if link and f"/{listing_endpoint}/" in link and link != url and not link.endswith("/rss"):
+                if not link.startswith("http"):
+                    link = base_url + link
+                items.add((title, link))
+
+        return list(items)
+    except Exception as e:
+        logging.error(f"Error scraping {url}: {e}")
         return []
-    
-    soup = BeautifulSoup(response.text, "html.parser")
-    items = set()
-    
-    for item in soup.find_all("a"):
-        link = item.get("href")
-        title = item.text.strip()
-        if link and f"/{listing_endpoint}/" in link and link != url and not link.endswith("/rss"):
-            if not link.startswith("http"):
-                link = base_url + link
-            items.add((title, link))
-    
-    return list(items)
 
 
 def get_all_items(base_url, listing_endpoint, pagination_format, num_pages):
+    """Scrapes multiple pages to collect all links."""
     all_items = set()
-    
+
     for page in range(1, num_pages + 1):
         url = f"{base_url}/{listing_endpoint}/{pagination_format}{page}"
         items = get_page_items(url, base_url, listing_endpoint)
@@ -41,68 +52,87 @@ def get_all_items(base_url, listing_endpoint, pagination_format, num_pages):
         
         all_items.update(items)
         st.write(f"Scraped page {page}")
-    
+
     return list(all_items)
 
 
 def extract_text_from_pdf(pdf_path):
-    text = ""
-    with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            extracted_text = page.extract_text()
-            if extracted_text:
-                text += extracted_text + "\n"
-    return text
+    """Extracts text from a PDF file."""
+    try:
+        text = ""
+        with pdfplumber.open(pdf_path) as pdf:
+            for page in pdf.pages:
+                extracted_text = page.extract_text()
+                if extracted_text:
+                    text += extracted_text + "\n"
+        return text
+    except Exception as e:
+        logging.error(f"Error extracting text from PDF {pdf_path}: {e}")
+        return ""
 
 
 def summarize_text(text):
-    client = OpenAI()
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": "Summarize the following text into a concise paragraph."},
-            {"role": "user", "content": text}
-        ]
-    )
-    return response.choices[0].message.content
+    """Summarizes extracted text using OpenAI."""
+    try:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Summarize the following text into a concise paragraph."},
+                {"role": "user", "content": text}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logging.error(f"Error in summarization: {e}")
+        return "Summarization failed."
 
 
 async def download_pdf(url, session, save_path):
-    async with session.get(url) as response:
-        if response.status == 200:
-            with open(save_path, 'wb') as f:
-                f.write(await response.read())
-            return save_path
+    """Downloads a PDF file asynchronously."""
+    try:
+        async with session.get(url) as response:
+            if response.status == 200:
+                with open(save_path, 'wb') as f:
+                    f.write(await response.read())
+                return save_path
+    except Exception as e:
+        logging.error(f"Error downloading {url}: {e}")
     return None
 
 
 async def scraper(url):
-    browser_config = BrowserConfig()
-    run_config = CrawlerRunConfig(remove_overlay_elements=True)
+    """Scrapes a webpage, extracts text, finds PDFs, and summarizes content."""
+    try:
+        browser_config = BrowserConfig()
+        run_config = CrawlerRunConfig(remove_overlay_elements=True)
 
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        result = await crawler.arun(url=url, config=run_config)
+        async with AsyncWebCrawler(config=browser_config) as crawler:
+            result = await crawler.arun(url=url, config=run_config)
 
-        # Extract Text from Page
-        soup = BeautifulSoup(result.html, "html.parser")
-        paragraphs = "\n".join([p.get_text() for p in soup.find_all("p")])
-        summarized_text = summarize_text(paragraphs) if paragraphs else "No text available to summarize."
+            # Extract Text from Page
+            soup = BeautifulSoup(result.html, "html.parser")
+            paragraphs = "\n".join([p.get_text() for p in soup.find_all("p")])
+            summarized_text = summarize_text(paragraphs) if paragraphs else "No text available to summarize."
 
-        # Extract PDFs
-        internal_links = result.links.get("internal", [])
-        pdf_links = [link['href'] for link in internal_links if '.pdf' in link['href'].lower()]
+            # Extract PDFs
+            internal_links = result.links.get("internal", [])
+            pdf_links = [link['href'] for link in internal_links if '.pdf' in link['href'].lower()]
 
-        # Download PDFs
-        extracted_texts = []
-        if pdf_links:
-            async with aiohttp.ClientSession() as session:
-                for i, link in enumerate(pdf_links):
-                    pdf_path = f"document_{i}.pdf"
-                    saved_path = await download_pdf(link, session, pdf_path)
-                    if saved_path:
-                        extracted_texts.append(extract_text_from_pdf(saved_path))
+            # Download PDFs
+            extracted_texts = []
+            if pdf_links:
+                async with aiohttp.ClientSession() as session:
+                    for i, link in enumerate(pdf_links):
+                        pdf_path = f"document_{i}.pdf"
+                        saved_path = await download_pdf(link, session, pdf_path)
+                        if saved_path:
+                            extracted_texts.append(extract_text_from_pdf(saved_path))
 
-        return summarized_text, pdf_links, extracted_texts
+            return summarized_text, pdf_links, extracted_texts
+    except Exception as e:
+        logging.error(f"Scraping error: {e}")
+        return "Scraping failed.", [], []
 
 
 # ----------------- Streamlit UI -----------------
@@ -115,22 +145,17 @@ pagination_format = st.text_input("Enter Pagination Format", "?query=&page=")
 num_pages = st.number_input("Enter Number of Pages", 1, 20, 3)
 
 async def run_scraper():
+    """Runs all scraper tasks asynchronously."""
     tasks = [scraper(link) for _, link in items]  # Create async tasks
     results = await asyncio.gather(*tasks)  # Run all tasks concurrently
     return results
 
 if st.button("Start Scraping"):
-
+    
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    elif sys.platform == "darwin":  # macOS
-        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
-    elif sys.platform.startswith("linux"):
-        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
-    else:
-        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())  # Fallback for unknown platforms
 
-        
+
     with st.spinner("Scraping in progress..."):
         items = get_all_items(base_url, listing_endpoint, pagination_format, num_pages)
 
@@ -140,8 +165,10 @@ if st.button("Start Scraping"):
             st.write(link)
 
         # Run scraper asynchronously
-        scrape_results = asyncio.run(run_scraper())  # ✅ Properly runs async tasks
-        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        scrape_results = loop.run_until_complete(run_scraper())
+
         # Display Results
         for i, (summary, pdf_links, extracted_texts) in enumerate(scrape_results):
             st.subheader(f"Result {i+1}")

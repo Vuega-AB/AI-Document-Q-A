@@ -112,11 +112,12 @@ def process_pdf(file):
 
 # Together.AI Integration
 def generate_response(prompt, context, model, temp, top_p):
+    system_prompt = st.session_state.config["system_prompt"]
     try:
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": f"{st.session_state.config['system_prompt']}"},
+                {"role": "system", "content": f"{system_prompt}"},
                 {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
             ],
             temperature=temp,
@@ -153,6 +154,7 @@ with st.sidebar:
     st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
     st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, st.session_state.config["temperature"], 0.05)
     st.session_state.config["top_p"] = st.slider("Top-P", 0.0, 1.0, st.session_state.config["top_p"], 0.05)
+    st.session_state.config["system_prompt"] = st.text_area("System Prompt", value=st.session_state.config["system_prompt"])
     config_file = st.file_uploader("Upload Configuration", type=['json'])
     if config_file:
         load_config(config_file)
