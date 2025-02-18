@@ -1,3 +1,9 @@
+import sys
+import asyncio
+# Set Windows event loop policy to support subprocesses (required by Playwright)
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 import streamlit as st
 import os
 import io
@@ -15,12 +21,13 @@ from pymongo.server_api import ServerApi
 from google.api_core import exceptions
 from PyPDF2 import PdfReader
 import pdfplumber
-import asyncio
 import aiohttp
 from crawl4ai import AsyncWebCrawler
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 from bs4 import BeautifulSoup
 import re
+import time
+
 # Load environment variables
 load_dotenv()
 API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -114,7 +121,7 @@ def extract_text(uploaded_file):
 
 def process_pdf(file, filename):
     text = extract_text(file)
-    # Chunk the text into pieces of 2000 characters
+    # Chunk the text into pieces
     chunks = chunk_text(text)
     st.session_state.config["text_chunks"].extend(chunks)
     update_vector_db(chunks, filename)
@@ -153,8 +160,6 @@ def retrieve_context(query, top_k=15):
             unique_texts.append(texts[i])
 
     return unique_texts
-
-import time
 
 def generate_response(prompt, context):
     system_prompt = st.session_state.config["system_prompt"]
@@ -239,7 +244,10 @@ async def fetch_and_process_pdf_links(url: str):
         st.success("Finished processing all PDF links.")
 
 def process_pdf_links_from_url_sync(url: str):
-    asyncio.run(fetch_and_process_pdf_links(url))
+    # Replace asyncio.get_event_loop() with ProactorEventLoop as requested
+    loop = asyncio.ProactorEventLoop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(fetch_and_process_pdf_links(url))
 
 # ========= Streamlit UI =========
 
