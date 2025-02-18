@@ -1,0 +1,133 @@
+AUDIT REPORT ON THE EUROPEAN UNION AGENCY FOR
+LAW ENFORCEMENT COOPERATION (EUROPOL)
+The Hague, 16 December 2022 - EDPS Case number 2022-0382
+Executive summary
+Introduction
+The European Data Protection Supervisor (EDPS) is the independent supervisory authority
+established by Article 52 of Regulation (EU) 2018/1725 and responsible under Article 43 of
+Regulation (EU) 2016/794 (hereinafter referred to as ‘the Europol Regulation’ or ‘ER’
+abbreviated) for:
+ monitoring and ensuring the application of the provisions of the Europol Regulation and
+of Regulation (EU) 2018/1725 relating to the protection of fundamental rights and
+freedoms of natural persons with regard to the processing of personal data by Europol,
+and for advising Europol and data subjects on all matters concerning the processing of
+personal data.
+To these ends, the EDPS fulfils the duties provided for in Article 43(2) and exercises the
+powers granted in Article 43(4) of the Europol Regulation. Among his powers to investigate,
+the EDPS can carry out investigations in the form of data protection inspections. The power
+to inspect is one of the tools established to monitor and ensure compliance with Europol’s
+legal framework.
+The inspection at Europol was part of the EDPS annual audit plan for 2022. The formal
+Decision was communicated to Europol by means of an Announcement Letter dated 17
+November 2022. The fieldwork was carried out on 16 December 2022 at Europol’s premises,
+Eisenhowerlaan 73 2517 KK in The Hague, The Netherlands.
+Scope of the inspection
+The EDPS carried out an inspection of Europol’s processing of personal data of minors under
+15 years old, provided to the Agency by third countries and international organisations, and
+marked as suspects.
+According to Article 30(1) of the Europol Regulation, the processing of individuals under the
+age of 18 is allowed if it is strictly necessary and proportionate for the purposes of preventing
+or combating crime within the scope of Europol’s objectives. This requirement reflects the
+additional vulnerability of minors and the sensitivity associated with processing their data,
+as well as the potential harms they may face if involved in the criminal justice system at an
+early stage of their development.
+More specifically, the EDPS limited the scope of this inspection to the processing of minors
+under 15 years old. This decision was based on the findings of the Joint 2018 Annual
+Inspection with regard to the compliance with Article 30(1) ER, where the average Minimum
+Age of Criminal Responsibility (MACR) used at Member State level was found to be 15 years
+old. This in turn means that personal data on minors processed by Europol before the minor
+reaches 15 years of age should be carefully checked to ensure lawfulness of the processing.
+The 2018 Annual Inspection also showed the need for coordinated supervision of the
+processing of personal data of minors, in particular of minors under 15 marked as suspects
+in Europol systems.
+Under Article 38 ER, the responsibility for the legality of a transfer and of the quality of the
+personal data processed by Europol, and thus of the lawful marking of a minor as suspect
+(during the ‘Data Subject Categorisation’, or ‘DSC’ process)1 and of the accuracy of the
+personal data processed about that minor, lies with Europol when the data is provided by
+third countries or international organisations (Article 38(2)(b) Europol Regulation).
+Such responsibility lies with Member States when they provide personal data to Europol. A
+finding of the 2018 Annual Inspection was that, given the complexity of the different national
+legal frameworks as regards the definition of the minimum age of criminal responsibility, it
+is difficult for Europol to give assurance that data provided by national authorities complies
+with this requirement.
+A coordinated supervisory action was thus launched in 2020 in the context of the Europol
+Cooperation Board2, now taken over by the Coordinated Supervision Committee (CSC) 3 of
+the European Data Protection Board (EDPB). Within the CSC, the supervisory authorities of
+Member States, along with the EDPS, have undertaken to verify the lawfulness and accuracy
+of the processing of personal data of minors under 15 sent to Europol as suspects, on a yearly
+basis. This subcategory of minors was chosen based on the same combination of the
+stigmatising effect of being labelled specifically as a suspect, as well as the common MACR
+of 15 years old across EU Member States. It must be borne in mind that Article 30(1) of the
+Europol Regulation requires that all personal data about minors is processed only where
+‘strictly necessary’, and not only this subcategory of minors under 15. However, even among
+this already specially protected category of data, processing data on minors under 15 as
+suspects can be seen as the ‘most sensitive of sensitive’ processing.
+1 In the context of Europol, DSC stands for Data Subject Categorisation. It is the act of identifying in datasets
+suspects, potential future criminals, contacts and associates, victims, witnesses and informants linked to
+criminal activities.
+2 The Europol Cooperation Board (ECB) was an advisory body composed of representatives of the national
+supervisory authorities of the European Union Member States and of the EDPS, cooperating on specific
+issues requiring national involvement and to ensure the consistent application of the Europol Regulation.
+3 On 28 June 2022, the ECB ceased to exist with the entry into force of Regulation (EU) 2022/991 of the
+European Parliament and of the Council of 8 June 2022, which transferred its tasks to the Coordinated
+Supervision Committee of the EDPB.
+2
+For these reasons, national data protection authorities have undertaken, on a yearly basis, to
+verify the lawfulness of the transmission of data about these minors by EU Member State
+competent enforcement authorities to Europol.
+As an integral part of this joint exercise, the EDPS, as the supervisory authority of Europol,
+should also conduct checks of the processing of personal data of minors under 15, transferred
+to Europol by third countries and international organisations, thus ensuring that all
+contributions are covered.
+This inspection was carried out in that context.
+Key findings of the inspection
+The audit identified seven formal findings. The main findings are summarised below:
+• The EDPS found that the general process for the assessment of information provided by
+partners on minors (including minors under 15 years old) is clear and well developed.
+Furthermore, this general process has been well documented in the appropriate process
+descriptions and guidelines. However, when examining whether Europol applies any
+specific (or additional) safeguards for personal data transferred by third countries and
+international organisations, the EDPS found that Europol does not apply different
+measures to those data.
+The EDPS considers that the assessment Europol needs to perform where it receives
+personal data of minors under 15 years old marked as ‘suspects’ by third countries and
+international organisations differs from the assessment it needs to perform where it
+receives this data from Member States. Whereby for the latter Europol can rely (if
+available) on the sender’s own assessment that the transfer is lawful under their legal
+system, for third country partners Europol must instead perform its own assessment
+whether the data is lawful under the EU’s legal system (which may have a higher
+threshold).
+• Upon conducting specific checks of third country datasets, the EDPS found multiple cases
+where minors (under 15 years old) apparently have only been involved in relatively minor
+infractions, such as pickpocketing (at least two cases) or shoplifting, within the broader
+framework of an organised crime group.
+The EDPS considers it crucial to distinguish between the varying levels of involvement
+within an organised crime group. While the organised crime group itself may be engaged
+in more serious or organised criminal activities, minors affiliated with the group may
+have limited roles or may have been coerced or influenced by family ties or older family
+members. Thus, attributing the same level of suspicion (in terms of classification) to
+minors as to the main organisers of the criminal activities could fail to acknowledge the
+nuances of their participation and may not meet the threshold of ‘strict proportionality’
+established in Article 30(1) of the Europol Regulation.
+• On the technical side, the EDPS found that Europol has recently upgraded its architecture
+for the processing of personal data for operational analysis purposes (Article 18(2)(c) of
+the Europol Regulation). The EDPS found that as part of this, several improvements have
+been made to the technical enforcement of data protection safeguards, including data
+3
+retention and tracking of the reasons for the processing of minors. However, the
+justification fields (providing the reasoning for the processing) inspected by the EDPS did
+not yet meet the standard set out by Europol itself, which in turn implement Article 30(1)
+of the Europol Regulation.
+Recommendations and follow-up of the audit
+As a result of the audit activities and his findings, the EDPS has issued a set of 10
+recommendations addressed to Europol. The main findings and recommendations are
+included at the end of each section of the report (with a full compiled list of recommendations
+inserted in Section 5). The recommendations contained in the report are issued in order to
+ensure compliance with the Europol Regulation, as well as Chapter IX of Regulation
+2018/1725.
+In the case of 6 out of 10 recommendations, implementation is designated as imperative to
+ensure compliance with the legal framework, with the requirement that Europol provides
+documentary evidence to the EDPS of implementation within the specified timeframe.
+This inspection was part of the EDPS Annual Audit Plan for 2022
+6 September 2023
+4

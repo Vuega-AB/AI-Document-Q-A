@@ -1,0 +1,34 @@
+Extracted Paragraphs:
+All official European Union website addresses are in the europa.eu domain.
+Brussels, 13 February - The EDPB published the Coordinated Supervision Committee's (CSC) biannual activity report (July 2022 - December 2024).
+Over the last two years, the CSC worked on the integration of the large-scale EU information technology (IT) systems within its scope. During the reporting period, it took over the supervision of the upgraded Schengen Information System (SIS) and the Visa Information System (VIS).
+In addition, the Committee prepared for the arrival of new systems and for the implementation of interoperability regulations.
+The Committee has also published a set of recommendations on the Internal Market Information System (IMI) transparency obligations for data controllers.
+In addition, in July 2023, the CSC published ‘Europol’s information systems - a guide for exercising data subjects’ rights: the right of access, rectification, erasure and restriction’.
+Following the 2022 Audit Report of the EDPS on Europol’s processing of personal data of minors under 15 years old, provided to Europol by third countries and international organisations and marked as suspects, the CSC undertook a coordinated activity to analyse the input from several Member States.
+During the past two years, the Committee also promoted dialogue and engagement with stakeholders, particularly with civil society.
+ 
+Looking forward to the coming years, the CSC is ready to welcome more EU IT systems and EU bodies, offices or agencies within its scope. As the range of the CSC’s activities continues to expand, the Committee will keep its organisation and operation under constant review to ensure an effective and efficient supervision.
+In addition, the CSC will continue to assist national data protection authorities (DPAs) in their work, by providing further clarification on the interpretation of EU and national laws. The Committee will also foster the exchange of information and best practices, and provide support for joint audits and coordinated inspections.
+Taking advantage of its unique framework and broad perspective, the CSC will ensure the proper monitoring of multiple data flows among systems, transversal interactions and sharing of information between EU agencies and bodies. To this end, and to guarantee a high level of data protection, the Committee will keep developing coordinated supervisory activities.
+ 
+The CSC is a group of DPAs, which together ensure coordinated supervision of large scale IT systems, and of EU bodies, offices and agencies falling under its scope.
+The CSC enjoys an autonomous functioning and positioning and it adopts its own rules of procedure and working methods. The Committee was established within the framework of the EDPB. 
+Your feedback helps us improve our website. Please take a moment to share your thoughts about your experience on our site.
+Give Feedback
+When you visit our website, if you give your consent, we will use cookies to allow us to collect data for aggregated statistics to improve our services and remember your choice for future visits.
+If you don't want this, we will only use cookies to remember your choice for future visits (i.e., essential cookies).
+If you don't select any of the two options, no cookies will be deployed, but the banner will re-appear every time you enter our website.
+More information on cookies and data protection
+
+Summarized Text:
+The European Data Protection Board (EDPB) has released its biannual report from the Coordinated Supervision Committee (CSC) covering activities from July 2022 to December 2024. The CSC has focused on integrating and supervising large-scale EU IT systems such as the Schengen Information System and Visa Information System. It has also provided guidelines for data subjects' rights concerning Europol and recommended transparency obligations for the Internal Market Information System. Looking ahead, the CSC is prepared to oversee more EU IT systems and plans to continue assisting national data protection authorities by facilitating information exchange and joint audits. The CSC operates independently within the EDPB framework and adopts its own procedures.
+
+PDF Links:
+https://www.edpb.europa.eu/system/files/2024-04/recommendations-on-imi-transparency-obligations_en.pdf
+https://www.edpb.europa.eu/system/files/2023-09/20230725_europol_guide_for_exercising_the_rights_draft_version_sec_fv.pdf
+https://www.edps.europa.eu/system/files/2023-09/23-09-06_executive-summary-europol-inspection-report_en.pdf
+
+Downloaded: https://www.edpb.europa.eu/system/files/2024-04/recommendations-on-imi-transparency-obligations_en.pdf
+Downloaded: https://www.edpb.europa.eu/system/files/2023-09/20230725_europol_guide_for_exercising_the_rights_draft_version_sec_fv.pdf
+Downloaded: https://www.edps.europa.eu/system/files/2023-09/23-09-06_executive-summary-europol-inspection-report_en.pdf
