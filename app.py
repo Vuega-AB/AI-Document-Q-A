@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 import dropbox
 import hashlib
 import time
+import re 
 
 # Load environment variables
 load_dotenv()
@@ -142,9 +143,32 @@ def extract_text_from_pdf(file):
             text += page_text + "\n"
     return text
 
+def chunk_text(text, chunk_size=400, min_chunk_length=20):
+    paragraphs = re.split(r'\n{2,}', text)  # Split by paragraphs
+    chunks = []
+
+    for para in paragraphs:
+        sentences = re.split(r'(?<=[.!?])\s+', para)  # Split paragraph into sentences
+        temp_chunk = ""
+
+        for sentence in sentences:
+            if len(temp_chunk) + len(sentence) < chunk_size:
+                temp_chunk += sentence + " "
+            else:
+                cleaned_chunk = temp_chunk.strip()
+                if len(cleaned_chunk) >= min_chunk_length:  # Remove very short chunks
+                    chunks.append(cleaned_chunk)
+                temp_chunk = sentence + " "  # Start a new chunk
+        
+        cleaned_chunk = temp_chunk.strip()
+        if len(cleaned_chunk) >= min_chunk_length:  # Append remaining text if valid
+            chunks.append(cleaned_chunk)
+
+    return chunks
+
 def process_pdf(file, file_name, file_hash):
     text = extract_text_from_pdf(file)
-    chunks = [text[i:i + 2000] for i in range(0, len(text), 2000)]
+    chunks = chunk_text(text)
     update_vector_db(chunks, file_name, file_hash)
     save_data_to_dropbox()
     return chunks
@@ -180,14 +204,14 @@ def load_config(uploaded_file):
 
 def generate_response(prompt, context):
     try:
-        max_context_tokens = 6000
-        truncated_context = context[:max_context_tokens]
+        # max_context_tokens = 6000
+        # truncated_context = context[:max_context_tokens]
         
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "developer", "content": st.session_state.config["system_prompt"]},
-                {"role": "user", "content": f"Context: {truncated_context}\n\nQuestion: {prompt}"}
+                {"role": "user", "content": f"Context: {context}\n\nQuestion: {prompt}"}
             ],
             temperature=st.session_state.config["temperature"],
             top_p=st.session_state.config["top_p"]
@@ -196,7 +220,7 @@ def generate_response(prompt, context):
     except Exception as e:
         return f"Error generating response: {str(e)}"
 
-def retrieve_context(query, top_k=3):
+def retrieve_context(query, top_k=20):
     global text_store, faiss_index
     query_embedding = embedding_model.encode([query])
     distances, indices = faiss_index.search(query_embedding, top_k)
