@@ -103,48 +103,48 @@ async def download_pdf(url, session, save_path):
 
 async def scraper(url):
     """Scrapes a webpage, extracts text, finds PDFs, and summarizes content."""
-    try:
-        browser_config = BrowserConfig(
-            browser_type="chromium",  # Use Chromium for compatibility
-            headless=True,  # Run in headless mode for Streamlit
-            use_managed_browser=False,  # Disable managed mode to prevent conflicts
-            debugging_port=None,  # No debugging port needed
-            proxy=None,  # Disable proxy unless explicitly required
-            text_mode=True,  # Optimize for text scraping (faster)
-            light_mode=True,  # Further performance optimizations
-            verbose=True,  # Enable logging for debugging
-            ignore_https_errors=True,  # Avoid SSL certificate issues
-            java_script_enabled=True  # Enable JS for dynamic content
-        )
+    # try:
+    browser_config = BrowserConfig(
+        browser_type="chromium",  # Use Chromium for compatibility
+        headless=True,  # Run in headless mode for Streamlit
+        use_managed_browser=False,  # Disable managed mode to prevent conflicts
+        debugging_port=None,  # No debugging port needed
+        proxy=None,  # Disable proxy unless explicitly required
+        text_mode=True,  # Optimize for text scraping (faster)
+        light_mode=True,  # Further performance optimizations
+        verbose=True,  # Enable logging for debugging
+        ignore_https_errors=True,  # Avoid SSL certificate issues
+        java_script_enabled=True  # Enable JS for dynamic content
+    )
 
-        run_config = CrawlerRunConfig(remove_overlay_elements=True)
+    run_config = CrawlerRunConfig(remove_overlay_elements=True)
 
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            result = await crawler.arun(url=url, config=run_config)
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        result = await crawler.arun(url=url, config=run_config)
 
-            # Extract Text from Page
-            soup = BeautifulSoup(result.html, "html.parser")
-            paragraphs = "\n".join([p.get_text() for p in soup.find_all("p")])
-            summarized_text = summarize_text(paragraphs) if paragraphs else "No text available to summarize."
+        # Extract Text from Page
+        soup = BeautifulSoup(result.html, "html.parser")
+        paragraphs = "\n".join([p.get_text() for p in soup.find_all("p")])
+        summarized_text = summarize_text(paragraphs) if paragraphs else "No text available to summarize."
 
-            # Extract PDFs
-            internal_links = result.links.get("internal", [])
-            pdf_links = [link['href'] for link in internal_links if '.pdf' in link['href'].lower()]
+        # Extract PDFs
+        internal_links = result.links.get("internal", [])
+        pdf_links = [link['href'] for link in internal_links if '.pdf' in link['href'].lower()]
 
-            # Download PDFs
-            extracted_texts = []
-            if pdf_links:
-                async with aiohttp.ClientSession() as session:
-                    for i, link in enumerate(pdf_links):
-                        pdf_path = f"document_{i}.pdf"
-                        saved_path = await download_pdf(link, session, pdf_path)
-                        if saved_path:
-                            extracted_texts.append(extract_text_from_pdf(saved_path))
+        # Download PDFs
+        extracted_texts = []
+        if pdf_links:
+            async with aiohttp.ClientSession() as session:
+                for i, link in enumerate(pdf_links):
+                    pdf_path = f"document_{i}.pdf"
+                    saved_path = await download_pdf(link, session, pdf_path)
+                    if saved_path:
+                        extracted_texts.append(extract_text_from_pdf(saved_path))
 
-            return summarized_text, pdf_links, extracted_texts
-    except Exception as e:
-        logging.error(f"Scraping error: {e}")
-        return "Scraping failed.", [], []
+        return summarized_text, pdf_links, extracted_texts
+    # except Exception as e:
+    #     logging.error(f"Scraping error: {e}")
+    #     return "Scraping failed.", [], []
 
 
 # ----------------- Streamlit UI -----------------
@@ -164,8 +164,8 @@ async def run_scraper():
 
 if st.button("Start Scraping"):
     
-    # if sys.platform == "win32":
-    #     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
     with st.spinner("Scraping in progress..."):
         items = get_all_items(base_url, listing_endpoint, pagination_format, num_pages)
