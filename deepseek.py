@@ -20,11 +20,16 @@ API_KEY = os.getenv("TOGETHER_API_KEY")
 client = Together(api_key=API_KEY)
 
 # Available Together.AI models
-AVAILABLE_MODELS = [
-    "deepseek-ai/DeepSeek-V3",
-    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo",
-    "Qwen/Qwen1.5-7B-Chat"
-]
+MODEL_PRICING = {
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo": "$0.88",
+    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": "$3.50",
+    "databricks/dbrx-instruct": "$1.20",
+    "microsoft/WizardLM-2-8x22B": "$1.20",
+    "mistralai/Mixtral-8x22B-Instruct-v0.1": "$1.20",
+    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": "$0.60"
+}
+
+AVAILABLE_MODELS = list(MODEL_PRICING.keys())
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -36,7 +41,7 @@ if "config" not in st.session_state:
         "system_prompt": "You are a helpful assistant. Answer questions based on the provided context.",
         "stored_pdfs": [],
         "text_chunks": [],
-        "selected_models": AVAILABLE_MODELS[:3],  # Default to first three models
+        "selected_models": AVAILABLE_MODELS[:3],
         "vary_temperature": True,
         "vary_top_p": False
     }
@@ -134,7 +139,16 @@ st.title("📄 AI Document Q&A with Together.AI")
 # Sidebar Configuration
 with st.sidebar:
     st.header("Configuration")
-    st.session_state.config["selected_models"] = st.multiselect("Select AI Models (Up to 3)", AVAILABLE_MODELS, default=AVAILABLE_MODELS[:3])
+    st.session_state.config["selected_models"] = st.multiselect(
+        "Select AI Models (Up to 3)", 
+        AVAILABLE_MODELS,
+        default=AVAILABLE_MODELS[:3],
+    )
+
+    with st.expander("Model Pricing"):
+        for model, price in MODEL_PRICING.items():
+            st.write(f"**{model.split('/')[-1]}**: {price}")
+
     st.session_state.config["vary_temperature"] = st.checkbox("Vary Temperature", value=True)
     st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
     st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, st.session_state.config["temperature"], 0.05)
@@ -172,4 +186,19 @@ if prompt := st.chat_input("Ask a question"):
                 for top_p in top_p_values if st.session_state.config["vary_top_p"] else [st.session_state.config["top_p"]]:
                     with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
                         response = generate_response(prompt, context, model, temp, top_p)
-                    st.markdown(f"**Temp={temp}, Top-P={top_p}:** {response}")
+
+                    # Enhanced UI with clear separation
+                    st.markdown(f"""
+                        <div style="
+                            border: 2px solid #fc0303; 
+                            padding: 15px; 
+                            border-radius: 10px; 
+                            background-color: #f9f9f9;
+                            margin-top: 10px;">
+                            <strong style="color:#4CAF50;">Model:</strong> {model}<br>
+                            <strong style="color:#FF9800;">Temperature:</strong> {temp}<br>
+                            <strong style="color:#2196F3;">Top-P:</strong> {top_p}<br>
+                            <hr>
+                            <strong>Response:</strong> {response}
+                        </div>
+                    """, unsafe_allow_html=True)

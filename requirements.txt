@@ -10,3 +10,8 @@ google-generativeai
 python-dotenv
 together
 torch
+aiohttp
+asyncio
+pdfplumber
+crawl4ai
+openai

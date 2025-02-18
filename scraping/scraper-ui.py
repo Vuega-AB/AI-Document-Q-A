@@ -113,48 +113,6 @@ listing_endpoint = st.text_input("Enter Listing Endpoint", "tillsyner")
 pagination_format = st.text_input("Enter Pagination Format", "?query=&page=")
 num_pages = st.number_input("Enter Number of Pages", 1, 20, 3)
 
-# if st.button("Start Scraping"):
-#     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-
-#     with st.spinner("Scraping in progress..."):
-#         items = get_all_items(base_url, listing_endpoint, pagination_format, num_pages)
-
-#     if items:
-#         st.success(f"Found {len(items)} items!")
-#         for title, link in items:
-#             st.write(link)
-        
-#         # Scrape Each Link Asynchronously
-#         def run_scraper():
-#             results = []
-#             for _, link in items:
-#                 loop = asyncio.new_event_loop()
-#                 asyncio.set_event_loop(loop)
-#                 result = loop.run_until_complete(scraper(link))  # ✅ Run each scrape in a separate loop
-#                 results.append(result)
-#                 loop.close()
-#             return results
-
-        
-#         loop = asyncio.new_event_loop()
-#         asyncio.set_event_loop(loop)
-#         scrape_results = loop.run_until_complete(run_scraper())
-
-#         # Display Results
-#         for i, (summary, pdf_links, extracted_texts) in enumerate(scrape_results):
-#             st.subheader(f"Result {i+1}")
-#             st.write("**Summarized Text:**", summary)
-#             if pdf_links:
-#                 st.write("**Extracted PDFs:**")
-#                 for pdf in pdf_links:
-#                     st.markdown(f"[Download PDF]({pdf})")
-#             if extracted_texts:
-#                 st.write("**Extracted Text from PDFs:**")
-#                 st.text(extracted_texts[0])
-
-#     else:
-#         st.warning("No items found.")
-
 async def run_scraper():
     tasks = [scraper(link) for _, link in items]  # Create async tasks
     results = await asyncio.gather(*tasks)  # Run all tasks concurrently
