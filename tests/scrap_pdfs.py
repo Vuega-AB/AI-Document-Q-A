@@ -84,5 +84,5 @@ def scrape_pdfs(base_url, output_file='pdf_links.txt', max_pages=50):
                 break
 
 # Example usage
-main_page_url = 'https://www.imy.se/tillsyner/'  # Replace with actual website
+main_page_url = 'https://www.imy.se/tillsyner/'
 scrape_pdfs(main_page_url)
