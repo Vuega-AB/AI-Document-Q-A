@@ -14,17 +14,21 @@ from io import BytesIO
 from dotenv import load_dotenv
 import dropbox
 import hashlib
+import json
+import time
 
 # Load environment variables
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-DROPBOX_TOKEN = os.getenv("DROPBOX_TOKEN")
+DROPBOX_REFRESH_TOKEN = os.getenv("DROPBOX_REFRESH_TOKEN")
+DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY")
+DROPBOX_APP_SECRET = os.getenv("DROPBOX_APP_SECRET")
 
 # Initialize models and configurations
 INDEX_FILE = "faiss_index.index"
 CONFIG_FILENAME = "config.json"
 INDEX_FILE_DROPBOX = "/faiss_index.index"  # Path on Dropbox
 TEXT_FILE_DROPBOX = "/text_store.json"  # Path on Dropbox
+TOKEN_FILE = "dropbox_token.json"
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -38,9 +42,54 @@ if "config" not in st.session_state:
         "text_chunks": []
     }
 
+def load_access_token():
+    """Load access token from file if available and not expired."""
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE, "r") as file:
+            data = json.load(file)
+            return data.get("access_token"), data.get("expires_at")
+    return None, None
+
+def save_access_token(access_token, expires_in):
+    """Save access token to file with expiry timestamp."""
+    expires_at = int(time.time()) + expires_in - 60  # Buffer time to refresh before expiry
+    with open(TOKEN_FILE, "w") as file:
+        json.dump({"access_token": access_token, "expires_at": expires_at}, file)
+
+def get_dropbox_access_token():
+    """Fetch a new Dropbox access token using the refresh token."""
+    response = requests.post(
+        "https://api.dropbox.com/oauth2/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": DROPBOX_REFRESH_TOKEN,
+        },
+        auth=(DROPBOX_APP_KEY, DROPBOX_APP_SECRET),
+    )
+    
+    if response.status_code == 200:
+        data = response.json()
+        access_token = data["access_token"]
+        expires_in = data.get("expires_in", 14400)  # Default to 4 hours if not provided
+        print(data)
+        save_access_token(access_token, expires_in)
+        return access_token
+    else:
+        raise Exception(f"Failed to refresh token: {response.text}")
+
+def get_valid_access_token():
+    """Retrieve a valid access token, refreshing if necessary."""
+    import time
+    access_token, expires_at = load_access_token()
+    if access_token and expires_at and int(time.time()) < expires_at:
+        return access_token
+    return get_dropbox_access_token()
+
 def initialize_dropbox():
+    """Initialize Dropbox client with a valid access token."""
     try:
-        dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+        access_token = get_valid_access_token()
+        dbx = dropbox.Dropbox(access_token)
         return dbx
     except Exception as e:
         st.error(f"Error connecting to Dropbox: {e}")
