@@ -175,10 +175,12 @@ if st.button("Start Scraping"):
         for title, link in items:
             st.write(link)
 
+        scrape_results = []
         # Run scraper asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        scrape_results = loop.run_until_complete(run_scraper())
+        with st.spinner("Scraping in progress..."):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            scrape_results = asyncio.run(run_scraper())
 
         # Display Results
         for i, (summary, pdf_links, extracted_texts) in enumerate(scrape_results):
