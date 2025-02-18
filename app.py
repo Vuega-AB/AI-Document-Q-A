@@ -14,7 +14,6 @@ from io import BytesIO
 from dotenv import load_dotenv
 import dropbox
 import hashlib
-import json
 import time
 
 # Load environment variables
