@@ -123,7 +123,14 @@ if st.button("Start Scraping"):
 
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    
+    elif sys.platform == "darwin":  # macOS
+        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+    elif sys.platform.startswith("linux"):
+        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())
+    else:
+        asyncio.set_event_loop_policy(asyncio.DefaultEventLoopPolicy())  # Fallback for unknown platforms
+
+        
     with st.spinner("Scraping in progress..."):
         items = get_all_items(base_url, listing_endpoint, pagination_format, num_pages)
 
