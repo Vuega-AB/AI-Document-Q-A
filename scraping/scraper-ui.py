@@ -7,6 +7,7 @@ import pdfplumber
 from crawl4ai import AsyncWebCrawler
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 from openai import OpenAI
+import sys
 
 # ----------------- Web Scraper Functions -----------------
 
@@ -119,8 +120,10 @@ async def run_scraper():
     return results
 
 if st.button("Start Scraping"):
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    
     with st.spinner("Scraping in progress..."):
         items = get_all_items(base_url, listing_endpoint, pagination_format, num_pages)
 
