@@ -1,826 +1,117 @@
-EUROPOL’S INFORMATION SYSTEMS
-A GUIDE FOR EXERCISING DATA SUBJECTS’ RIGHTS:
-THE RIGHT OF ACCESS, RECTIFICATION, ERASURE AND RESTRICTION
-Secretariat postal address: Rue Wiertz 60, B-1047 Brussels
-Offices: Rue Montoyer 30, B-1000 Brussels
-E-mail : csc-secretariat@edpb.europa.eu
-This guide was compiled by the Coordinated Supervision Committee.
-The national contributions, and any translations of this guide into languages other than English, are
-the responsibility of each national supervisory authority and they do not necessarily reflect the
-official position of the CSC. The CSC does not guarantee the accuracy of the information included in
-the national contributions and any questions should be address to the respective national
-supervisory authorities. Neither the CSC nor any person acting on the CSC’s behalf may be held
-responsible for the use which may be made of the information contained therein.
-Secretariat postal address: Rue Wiertz 60, B-1047 Brussels
-Offices: Rue Montoyer 30, B-1000 Brussels
-E-mail : csc-secretariat@edpb.europa.eu
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights vis-à-vis Europol
-July 2023
-TABLE OF CONTENTS
-1. DATA CATEGORIES AND EXCHANGE OF PERSONAL DATA BETWEEN MEMBER STATES
-AND EUROPOL ........................................................................................................5
-2. RIGHTS GRANTED TO INDIVIDUALS WHOSE DATA ARE PROCESSED BY EUROPOL .......7
-2.1. Right of access..................................................................................................8
-2.2. Right to rectification, erasure and restriction .....................................................9
-2.3. Right to have the legality of data relating to them transferred to Europol
-verified ........................................................................................................10
-2.4. Remedies: the right to complain to EDPS or to initiate a judicial proceeding......10
-3. CONTACT POINTS ..................................................................................................11
-3.1. AUSTRIA ...............................................................................................................12
-3.2. BELGIUM ..............................................................................................................12
-3.3. BULGARIA .............................................................................................................12
-3.4. CROATIA ...............................................................................................................13
-3.5. CYPRUS.................................................................................................................13
-3.6. CZECH REPUBLIC ...................................................................................................14
-3.7. ESTONIA ...............................................................................................................14
-3.8. FINLAND ...............................................................................................................15
-3.9. FRANCE ................................................................................................................15
-3.10. GERMANY .............................................................................................................16
-3.11. GREECE.................................................................................................................16
-3.12. HUNGARY .............................................................................................................17
-3.13. IRELAND ...............................................................................................................17
-3.14. ITALY ....................................................................................................................18
-3.15. LATVIA ..................................................................................................................18
-3.16. LITHUANIA ............................................................................................................19
-3.17. LUXEMBOURG ......................................................................................................19
-3.18. MALTA..................................................................................................................20
-3
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.19. NETHERLANDS ......................................................................................................20
-3.20. POLAND................................................................................................................21
-3.21. PORTUGAL ............................................................................................................21
-3.22. ROMANIA .............................................................................................................21
-3.23. SLOVAK REPUBLIC .................................................................................................22
-3.24. SLOVENIA .............................................................................................................23
-3.25. SPAIN ...................................................................................................................23
-3.26. SWEDEN ...............................................................................................................24
-ANNEXES (TEMPLATE LETTERS) ......................................................................................25
-Annex 1 ................................................................................................................25
-Annex 2 ................................................................................................................26
-4
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-Individuals whose personal data are collected, held or otherwise processed by Europol are entitled
-to rights regarding their personal data, namely the right of access, right to rectification, erasure
-and restriction of personal data and the right to have the legality of transfer of his or her personal
-data verified by a national supervisory authority.
-This Guide describes the modalities for exercising those rights.
-The Guide is divided into three sections: (I) data categories and exchange of personal data
-between Member States and Europol, (II) the rights granted to the individuals whose personal
-data are processed in Europol’s Information Systems and (III) a description of the procedure for
-exercising the right of access in each of the countries concerned.
-1. DATA CATEGORIES AND EXCHANGE OF PERSONAL DATA BETWEEN MEMBER
-STATES AND EUROPOL
-Europol processes personal data based on Regulation (EU) 2016/794 of the European Parliament
-and of the Council of 11 May 2016 on the European Union Agency for Law Enforcement
-Cooperation (Europol) (hereinafter “Europol Regulation”), as amended by Regulation 2022/991 of
-the European Parliament and of the Council of 8 June 2022 (hereinafter “Regulation amending
-Europol Regulation”).
-Categories of personal data processed
-Personal data collected and processed by Europol relate to:
-a) persons who, in accordance with the national law of the Member State concerned, are
-suspected of having committed or having taken part in a criminal offence in respect of
-which Europol is competent, or who have been convicted of such an offence;
-b) persons regarding whom there are factual indications or reasonable grounds under the
-national law of the Member State concerned to believe that they will commit criminal
-offences in respect of which Europol is competent;
-c) persons who might be called on to testify in investigations in connection with the offences
-under consideration or in subsequent criminal proceedings;
-5
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-d) persons who have been the victims of one of the offences under consideration or with
-regard to whom certain facts give reasons to believe that they could be the victims of such
-an offence;
-e) contacts and associates; and
-f) persons who can provide information on the criminal offences under consideration.
-The categories of personal data and categories of data subjects whose data may be collected and
-processed for each purpose referred to in Article 18(2) are listed in Annex II to the Europol
-Regulation1.
-Processing of personal data, by automated or other means, revealing racial or ethnic origin,
-political opinions, religious or philosophical beliefs or trade union membership and processing of
-genetic data, biometric data for the purpose of uniquely identifying a natural person, or data
-concerning a person's health or sex life shall be allowed only where strictly necessary and
-proportionate for the purposes of research and innovation projects pursuant to Article 33a and
-for operational purposes, within Europol’s objectives, and only for preventing or combating crime
-that falls within Europol’s objectives. Such processing shall also be subject to appropriate
-safeguards laid down in this Regulation with regard to the rights and freedoms of the data subject,
-and, with the exception of biometric data processed for the purpose of uniquely identifying a
-natural person, shall be allowed only if those data supplement other personal data processed by
-Europol.
-The selection of a particular group of persons solely on the basis of such personal data shall be
-prohibited.
-Exchange of personal data
-Europol should be a hub for information exchange in the Union. Information collected, stored,
-processed, analysed and exchanged by Europol includes criminal intelligence which relates to
-information about crime or criminal activities falling within the scope of Europol’s objectives,
-obtained with a view to establishing whether concrete criminal acts have been committed or may
-be committed in the future.
-1 Regulation (EU) 2016/794 of the European Parliament and of the Council of 11 May 2016 on the European Union
-Agency for Law Enforcement Cooperation (Europol) and replacing and repealing Council Decisions 2009/371/JHA,
-2009/934/JHA, 2009/935/JHA, 2009/936/JHA and 2009/968/JHA, page 57
-6
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-In order to ensure an effective cooperation between Europol and Member States, a national unit
-should be set up in each Member State. The national unit should be the liaison link between
-national competent authorities and Europol. To ensure a continuous and effective exchange of
-information between Europol and the national units, and to facilitate their cooperation, each
-national unit should designate at least one liaison officer to be attached to Europol. The liaison
-officers shall assist in the exchange of information between Europol and their Member States.
-Also, liaison officers shall assist in the exchange of information between their Member States and
-the liaison officers of other Member States, third countries and international organisations.
-2. RIGHTS GRANTED TO INDIVIDUALS WHOSE DATA ARE PROCESSED BY
-EUROPOL
-In accordance with data protection principles, all individuals whose data are processed by Europol
-are granted specific rights by the aforementioned Europol Regulation.
-These are basically:
- the right of access to data relating to them stored by Europol;
- the right to rectification, erasure and restriction;
- the right to have the legality of data relating to them transferred to Europol verified;
- the right to bring proceedings before the court or competent authorities to correct or
-delete data or to obtain compensation.
-Anyone exercising any of these rights can apply to the authority appointed for that purpose in the
-Member State of his or her choice. That authority shall refer the request to Europol without delay
-and in any case within one month of receipt.
-Deadlines for replies to individuals’ requests
-When an individual exercises his/her right of access, his/her right to rectification, erasure and
-restriction, Europol shall answer it without undue delay, and in any case within three months of
-receipt by Europol of the request from the national authority.
-7
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-2.1. Right of access
-The right of access is the possibility for anyone who so requests to consult the information relating
-to him/her stored in a data file. This is a fundamental principle of data protection which enables
-data subjects to exercise control over personal data which is being processed by the controller,
-namely by Europol.
-This right is expressly provided for in Article 36 of Europol Regulation, and Article 80 of Regulation
-(EU) 2018/1725.
-Any data subject wishing to exercise the right of access to personal data relating to him or her may
-make a request to that effect to the authority appointed for that purpose in the Member State of
-his or her choice, or to Europol. Where the request is made to that authority, it shall refer the
-request to Europol without delay and in any case within one month of receipt.
-Europol shall answer it without undue delay and in any case within three months of receipt by
-Europol of the request from the national authority.
-Europol shall consult the competent authorities of the Member States and the provider of the
-data concerned so that they could have the opportunity to state their position as to the possibility
-of disclosing the data to the applicant, and to object to Europol's proposed response. In the latter
-case, the Member State or the provider of the data concerned shall notify Europol of the reasons
-for its objection.
-According to Article 81 of Regulation (EU) 2018/1725, Europol may restrict, wholly or partly, the
-right of access of the extent that, and for as long as such a partial or complete restriction
-constitutes a necessary and proportionate measure in a democratic society with due regard for
-the fundamental rights and legitimate interests of the natural person concerned, in order to:
-a) avoid obstructing official or legal inquiries, investigations or procedures;
-b) avoid prejudicing the prevention, detection, investigation or prosecution of criminal
-offences or the execution of criminal penalties;
-c) protect the public security of Member States;
-d) protect the national security of Member States;
-e) protect the rights and freedoms of others, such as victims and witnesses.
-In the cases referred above, Europol shall inform the data subject, without undue delay, in writing
-of any refusal or restriction of access and of the reasons for the refusal or the restriction. Such
-8
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-information may be omitted where the provision thereof would undermine one of the purpose
-above.
-2.2. Right to rectification, erasure and restriction
-Besides the right of access, there is also the right to request Europol, through the authority
-appointed for that purpose in the Member State of his or her choice, or to Europol, to rectify
-personal data concerning him or her held by Europol if they are incorrect or to complete or update
-the personal data.
-The data subjects have also the right to request Europol, directly or through the authority
-appointed for that purpose in the Member State of his or her choice, to erase personal data
-relating to him or her held by Europol if they are no longer required for the purposes for which
-they are collected or are further processed.
-If there are reasonable grounds to believe that erasure could affect the legitimate interests of the
-data subjects, Europol shall restrict rather than erase personal data. Restricted data shall be
-processed only for the purpose of protecting the rights of the data subject, where it is necessary
-to protect the vital interests of the data subject or of another person, or for the purposes laid
-down in Article 82(4) of Regulation (EU) 2018/1725 and listed below:
-a) avoid obstructing official or legal inquiries, investigations or procedures;
-b) avoid prejudicing the prevention, detection, investigation or prosecution of criminal
-offences or the execution of criminal penalties;
-c) protect the public security of Member States;
-d) protect the national security of Member States;
-e) protect the rights and freedoms of others, such as victims and witnesses.
-In all the cases, where the request is made to that authority, it shall refer the request to Europol
-without delay and in any case within one month of receipt.
-If personal data held by Europol have been provided to Europol by third countries, international
-organisations or Union bodies, have been directly provided by private parties, have been retrieved
-by Europol from publicly available sources or result from Europol’s own analyses, Europol shall
-rectify or erase such data or restrict their processing and when appropriate, inform the providers
-of the data.
-9
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-If personal data held by Europol have been provided to Europol by Member States, the Member
-States concerned shall rectify or erase such data or restrict their processing in collaboration with
-Europol, within their respective competences.
-The data subject shall be informed in writing of any refusal of rectification, erasure or restricting,
-of the reasons for such a refusal and of the possibility of lodging a complaint with the EDPS and of
-seeking a judicial remedy.
-2.3. Right to have the legality of data relating to them transferred to Europol verified
-Article 42 (4) of the Europol Regulation provides for the right to request the national supervisory
-authority of a Member State to verify the legality of any transfer or communication to Europol of
-data concerning him or her and of access to those data by the Member State concerned.
-Data subjects may request this verification in the Member State in which they wish for their right
-to be exercised.
-The right to request verification shall be exercised in accordance with the national law of the
-Member State in which the request is made.
-The national supervisory authority shall carry out the requested action by verifying whether the
-transfer of data to Europol by national competent authorities was done in a lawful way and shall
-communicate the outcome of the action to the data subject, all according to rules of national law.
-Article 84 of the Regulation (EU) 2018/1725 provides that this right can also be exercised through
-the European Data Protection Supervisor (EDPS) in cases where Europol may delay, restrict or omit
-the provision of the information to data subjects (according to Article 79(3) of this Regulation), or
-limit the right to access (according to Article 81) or refuse to rectify or erase data (according to
-Article 82(4)). The EDPS shall at least inform the data subject that all necessary verifications or a
-review by him or her have taken place, and of his or her right to seek a judicial remedy before the
-Court of Justice.
-2.4. Remedies: the right to complain to EDPS or to initiate a judicial proceeding
-Articles 47 and 50 of Europol Regulation present the remedies accessible to individuals when their
-request has not been satisfied.
-10
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-Any person may bring an action against Europol before the Court of Justice of the European Union,
-or against the Member State before a competent national court of that Member State to receive
-compensation for damage suffered.
-Any data subject shall have the right to lodge a complaint with the EDPS if he or she considers that
-the processing by Europol of personal data relating to him or her does not comply with the Europol
-Regulation or Regulation (EU) 2018/1725. The EDPS shall inform the data subject of the progress
-and outcome of the complaint, as well as the possibility of a judicial remedy.
-Additional information on the data protection supervisory role of the EDPS over Europol are to be
-found on the website of the EDPS within the dedicated section on “Supervision of Europol”
-(https://edps.europa.eu/data-protection/our-role-supervisor/supervision-europol en).
-3. CONTACT POINTS
-The contact details of the body to which requests for access, rectification or erasure should be
-addressed, if not directly to Europol, are provided in the remainder of this chapter, together with
-the contact details of the data protection authorities of each Member State and the EDPS.
-11
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.1. AUSTRIA
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Büro 2.2 Nationale Stelle EUROPOL
-Josef-Holaubek-Platz 1, 1090 Wien,
-email: BMI-II-BK-2-2@bmi.gv.at
-2. Contact details of the national data protection authority
-Österreichische Datenschutzbehörde
-Barichgasse 40-42, 1030 Wien
-Tel: +43 1 52 152-0
-email: dsb@dsb.gv.at
-3.2. BELGIUM
-Contact details of the body to which requests for access, rectification or erasure should be
-addressed and police dedicated national data protection authority
-Controleorgaan op de politionele
-informatie/Organe de contrôle de
-l’information policière
-Leuvenseweg/Rue de Louvain 48
-1000 Brussel/Bruxelles
-België/Belgique
-Tel: +32 2 549 94 20
-email : info@controleorgaan.be /
-info@organedecontrole.be
-Website: https://www.controleorgaan.be /
-https://www.organedecontrole.be
-Police processing monitoring:
-Controleorgaan op de politionele
-informatie/Organe de contrôle de l’information
-policière
-3.3. BULGARIA
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Ministry of Interior
-29, Shesti Septemvri Str.
-1000 SOFIA
-Tel: +359 2 9825 000
-email: priemna@mvr.bg
-12
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-Website: https://www.mvr.bg/
-2. Contact details of the national data protection authority
-Commission for Personal Data Protection
-2, Prof. Tsvetan Lazarov blvd.
-Sofia 1592
-Tel: + 359 2 915 3519
-Fax: +359 2 915 3525
-email: kzld@cpdp.bg
-Website: https://www.cpdp.bg/
-3.4. CROATIA
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Ministry of the Interior
-Ulica grada Vukovara 33
-HR - 10 000 Zagreb
-email: pitanja@mup.hr
-Website: www.mup.hr
-2. Contact details of the national data protection authority
-Croatian Personal Data Protection Agency
-Selska cesta 136
-10000 Zagreb
-Tel: +385 1 4609 000
-Fax: +385 1 4609 099
-email: azop@azop.hr
-Website: http://www.azop.hr/
-3.5. CYPRUS
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Chief of Police
-(for EUROPOL National Unit),
-Antistratigou Evangelou Floraki Street,
-Police Headquarters,
-1478 Nicosia,Cyprus
-e-mail: cyeuropol@police.gov.cy
-2. Contact details of the national data protection authority
-Commissioner for Personal Data Protection
-15 Kypranoros Street
-1061 Nicosia
-13
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-P.O. Box 23378, CY-1682 Nicosia
-Tel: +357 22 818 456
-Fax: +357 22 304 565
-email: commissioner@dataprotection.gov.cy
-Website: http://www.dataprotection.gov.cy/
-3.6. CZECH REPUBLIC
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Policie České republiky
-Policejní prezidium ČR
-Strojnická 27
-170 89 Praha 7
-Česká republika
-email: epodatelna.policie@pcr.cz
-website: www.policie.cz
-2. Contact details of the national data protection authority
-Úřad pro ochranu osobních údajů
-Pplk. Sochora 27
-170 00 Praha 7
-Česká republika
-email: posta@uoou.cz
-website: www.uoou.cz
-3.7. ESTONIA
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Europol National Unit
-Police and Border Guard Board
-Pärnu mnt 139, 15060 Tallinn, Estonia
-email: ppa@politsei.ee
-Website: https://www.politsei.ee/en/
-2. Contact details of the national data protection authority
-Estonian Data Protection Inspectorate
-(Andmekaitse Inspektsioon)
-Tatari 39
-10134 Tallinn
-Tel. +372 6274 135
-email: info@aki.ee
-Website: http://www.aki.ee/
-14
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.8. FINLAND
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Central Criminal Police
-Jokiniemenkuja 4
-PL 285
-FIN-01301 Vantaa
-Suomi/Finland
-email: kirjaamo.keskusrikospoliisi@poliisi.fi
-2. Contact details of the national data protection authority
-Office of the Data Protection Ombudsman
-Lintulahdenkuja 4
-P.O. Box 800
-FIN-00531 Helsinki
-Suomi/Finland
-Tel: +358 29 566 6700
-email: tietosuoja@om.fi
-Website: http://www.tietosuoja.fi/en/
-3.9. FRANCE
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Commission Nationale de l'Informatique et
-des Libertés (CNIL)
-3 Place de Fontenoy
-TSA 80715 - 75334 Paris CEDEX 07
-France
-Tel: +33 1 53 73 22 22
-Website: http://www.cnil.fr
-2. Contact details of the national data protection authority
-Commission Nationale de l'Informatique et des
-Libertés (CNIL)
-3 Place de Fontenoy
-TSA 80715 - 75334 Paris CEDEX 07
-France
-Tel: +33 1 53 73 22 22
-Website: http://www.cnil.fr
-15
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.10. GERMANY
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Bundeskriminalamt
-65173 Wiesbaden
-Germany
-email: ds-petenten@bka.bund.de
-2. Contact details of the national data protection authority
-Federal Commissioner for Data Protection and
-Freedom of Information
-Graurheindorfer Str. 153
-53117 Bonn
-Germany
-Tel: +49 228 997799 0
-email: poststelle@bfdi.bund.de
-De-mail: poststelle@bfdi.de-mail.de
-Website: https://www.bfdi.bund.de
-3.11. GREECE
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Ministry of Citizen Protection
-Hellenic Police HQ
-International Police Cooperation Division
-Europol National Unit
-4, P. Kanellopoulou Street
-101 77, Athens
-Greece
-Tel. 1: +30210 69 842 86
-Tel. 2: 213 1520334
-email: europol@police.gr
-2. Contact details of the national data protection authority
-Hellenic Data Protection Authority
-Kifisias Av. 1-3, PC 11523
-Ampelokipi Athens
-Greece
-Tel: +30210 64 75 600
-Fax: +30210 64 75 628
-email: contact@dpa.gr
-Website: http://www.dpa.gr/
-16
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.12. HUNGARY
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-National Police Headquarters
-International Law Enforcement Cooperation
-Centre
-Address: H-1139 Budapest, Teve u. 4-6
-Postal address: H-1903 Budapest, Pf.: 314/15
-Tel: +36 1 443 5596
-Fax: +36 1 443 5815
-email: nebek@nebek.police.hu
-Website: http://www.police.hu
-2. Contact details of the national data protection authority
-National Authority for Data Protection and
-Freedom of Information
-H-1055 Budapest, Falk Miksa u.9-11.
-Postal address: H-1363 Budapest, Pf.:9
-Tel: +36 1 391 1400
-email: ugyfelszolgalat@naih.hu
-Website: http://www.naih.hu
-3.13. IRELAND
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Europol National Unit
-Liaison & Protection
-Garda Headquarters
-Phoenix Park
-Dublin 8
-Tel: +353 1 666 0000
-Website: http://www.garda.ie
-2. Contact details of the national data protection authority
-Data Protection Commission
-21 Fitzwilliam Square,
-Dublin 2,
-D02 RD28,
-Ireland
-Phone: +353 (01) 7650100
-E-mail: info@dataprotection.ie
-Website: www.dataprotection.ie
-17
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.14. ITALY
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Unità Nazionale Europol
-c/o Direzione Centrale della Polizia Criminale – Servizio per la Coop.ne Int.le di Polizia
-Via Torre di Mezzavia, 9
-00173 Roma – Italy
-2. Contact details of the national data protection authority
-Garante per la Protezione dei Dati Personali
-Piazza di Monte Citorio 121
-I-00186 Roma
-Italia
-Tel. +39 06 69677 1
-Fax +39 06 69677 3785
-email: garante@garanteprivacy.it
-Website: http://www.garanteprivacy.it/
-3.15. LATVIA
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Data State Inspectorate
-Elijas Street 17,
-LV 1050 Riga
-Tel: +371 6722 3131
-email: pasts@dvi.gov.lv
-Website: http://www.dvi.gov.lv/
-2. Contact details of the national data protection authority
-Data State Inspectorate
-Elijas Street 17,
-LV 1050 Riga
-Tel: +371 6722 3131
-email: pasts@dvi.gov.lv
-Website: http://www.dvi.gov.lv/
-18
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.16. LITHUANIA
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-International Liaison Office of Lithuanian
-Criminal Police Bureau,
-Saltoniskiu St. 19
-LT-08105 Vilnius
-Tel.: +370 5 2719900
-Fax.: +370 52719924
-email: trv@policija.lt
-Website: www.policija.lt
-2. Contact details of the national data protection authority
-State Data Protection Inspectorate
-Sapiegos Str. 17
-LT-10312 Vilnius
-Tel: + 370 5 279 14 45
-email: ada@ada.lt
-Website: https://vdai.lrv.lt
-3.17. LUXEMBOURG
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Direction Générale de la Police Grand-Ducale
-A l’attention du délégué à la protection des données
-Cité Policière Grand-Duc Henri,
-B.P. 1007
-L-2957 Luxembourg
-Email : dpo@police.etat.lu
-Website:https://police.public.lu/fr/support/protection-des-donnees-a-caractere-personnel.html
-2. Contact details of the national data protection authority
-Commission Nationale pour la Protection des Données
-15, boulevard du Jazz
-L-4370 Belvaux
-Tel: +352 2610 60 1
-Fax: +352 2610 60 29
-email: info@cnpd.lu
-Website: http://www.cnpd.lu
-19
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.18. MALTA
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-The Data Protection Officer
-Legal Unit
-Police Headquarters
-St. Calcedonius Square
-Floriana FRN 1530
-Tel: +35621224001
-Website: www.pulizija.gov.mt
-2. Contact details of the national data protection authority
-Office of the Information and Data Protection
-Commissioner
-Second Floor, Airways House
-High Street, Sliema SLM 1549
-Tel: +356 2328 7100
-Fax: +356 2328 7198
-3.19. NETHERLANDS
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Dutch National Police - Central Unit
-Privacy Desk
-PO Box 100
-3970 AC Driebergen
-The Netherlands
-Tel: +31 618 144 712
-e-mail: jz.le@politie.nl
-2. Contact details of the national data protection authority
-Dutch Data Protection Authority (Autoriteit Persoonsgegevens)
-PO Box 93374
-2509 AJ DEN HAAG
-The Netherlands
-Tel. +31-70-8888500
-Fax +31-70-8888501
-e-mail: info@autoriteitpersoonsgegevens.nl
-website: www.autoriteitpersoonsgegevens.nl
-20
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.20. POLAND
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-National Police Headquarters
-International Police Cooperation Bureau
-ul. Puławska 148/150 02-624 Warsaw
-Tel: +47 72 123 72
-Fax: +47 72 144 94
-email: bmwp.kgp@policja.gov.pl
-Website: https://policja.pl/pol/kgp/bmwp
-2. Contact details of the national data protection authority
-Personal Data Protection Office
-ul. Stawki 2 00-193 Warsaw
-Tel: +48 22 531 03 00
-email: kancelaria@uodo.gov.pl
-Website: https://uodo.gov.pl/
-3.21. PORTUGAL
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Polícia Judiciária (PJ)
-Lisboa
-Email: Epd-dpo@pj.pt
-Website: https://www.policiajudiciaria.pt/
-2. Contact details of the national data protection authority
-Comissão Nacional de Proteção de Dados - CNPD
-Av. D. Carlos I, 134-1°
-1200-651 Lisboa
-Tel. +351 21 392 84 00
-Fax +351 21 397 68 32
-email: geral@cnpd.pt
-Website: https://www.cnpd.pt/
-3.22. ROMANIA
-1. Contact details of the body to which requests for rectification or erasure should be addressed
-Center for International Police Cooperation
-21
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-1-5 Calea 13 Septembrie, Bucharest,
-5th District Romania
-Tel.: +40 21 315 96 26, +40 21 314 05 40,
-+40 21 314 00 25
-Fax: +40 21 314 12 66, +40 21 312 36 00
-email: ccpi@mai.gov.ro
-Website: www.politiaromana.ro/ccpi.htm
-National
-2. Contact details of the national data protection authority
-National Supervisory Authority for personal
-data processing
-B-dul Magheru 28-30 (5th floor)
-1st District
-010336 - BUCHAREST
-Tel: +40 31 805 9211
-Fax: +40 31 805 9602
-email: anspdcp@dataprotection.ro
-Website: http://www.dataprotection.ro/
-3.23. SLOVAK REPUBLIC
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Ministerstvo Vnútra Slovenskej Republiky
-Pribinova 2
-81272 - BRATISLAVA
-Fax: +421 2 5094 4397
-Website: http://www.minv.sk
-2. Contact details of the national data protection authority
-Office for Personal Data Protection of the
-Slovak Republic
-Hraničná 12
-82007 – BRATISLAVA
-Tel.: + 421 2 32 31 32 14
-Fax: + 421 2 32 31 32 34
-email: statny.dozor@pdp.gov.sk
-Website: http://www.dataprotection.gov.sk/
-22
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.24. SLOVENIA
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Policija, Ministrstvo za notranje zadeve
-Štefanova 2
-1501 - LJUBLJANA
-Tel. : +386 1 428 47 80
-email: gp.policija@policija.si
-Website: https://www.policija.si
-2. Contact details of the national data protection authority
-Information Commissioner of the Republic of Slovenia
-Dunajska 22
-1000 LJUBLJANA
-Tel.: +386 1 230 97 30
-email: gp.ip@ip-rs.si
-Website: https://www.ip-rs.si/
-3.25. SPAIN
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-División de Cooperación Internacional,
-Dirección General de la Policía,
-POLICÍA NACIONAL
-Avda Pío XII, 50
-28016-MADRID
-Tel: 9133227638
-Fax: 913103620
-e-mail: dcr.gabinete@policia.es
-2. Contact details of the national data protection authority
-Agencia Española de Protección de Datos
-(AEPD)
-C/Jorge Juan, 6
-28001 Madrid
-Tel: +34 91399 6200
-Fax: +34 91455 5699
-email: internacional@agpd.es
-Website:
-23
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-3.26. SWEDEN
-1. Contact details of the body to which requests for access, rectification or erasure should be
-addressed
-Swedish Police Authority
-106 75 Stockholm
-Sweden
-Tel: +46 114 14
-E-mail: registrator.kansli@polisen.se
-Direct e-mail to Data Protection Officer:
-dataskyddsombud@polisen.se
-2. Contact details of the national data protection authority
-IMY (Integritetsskyddsmyndigheten)
-Fleminggatan 14, 7th floor
-Box 8114
-104 20 Stockholm
-Sweden
-Tel: +46 8 657 6100
-E-mail: imy@imy.se
-Website: https://www.imy.se
-3.27. EDPS
-European Data Protection Supervisor
-Postal address: Rue Wiertz 60, B-1047 Brussels
-Office address: Rue Montoyer 30, B-1000 Brussels
-Tel: +32 2 283 19 00
-Email: edps@edps.europa.eu
-Website: edps.europa.eu
-24
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-ANNEXES (TEMPLATE LETTERS)
-The following template letters can be used to file your request unless the national competent
-authority to which you address your request asks you to use a specific standard form.
-Annex 1
-Template letter for requesting access
-To: Title and address of the competent authority / Europol
-DD-MM-XXXX,
-Place
-Dear Sir / Madam,
-Pursuant to Article 36 of Regulation (EU) 2016/794 of the European Parliament and of the Council
-of 11 May 2016 on the European Union Agency for Law Enforcement Cooperation (Europol),
-amended by Regulation (EU) 2022/991 of the European Parliament and of the Council of 8 June
-2022, and replacing and repealing Council Decisions 2009/371/JHA, 2009/934/JHA,
-2009/935/JHA, 2009/936/JHA and 2009/968/JHA, I_____________________________ (name,
-surname), ____________________ (nationality), _____________ (date and place of birth),
-________________________________ (address), would like to request access to my personal
-data processed by Europol.
-Please find enclosed:
-1. Copy of a valid identity document under the national law of the state (passport/identity card/driving
-licence (other valid identity document);
-2. Copy of the legal authorisation to represent the applicant;
-3. Other.
-The Applicant / The Legal Representative
----------------------------------------------
-(Signature)
-25
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
-Annex 2
-Template letter for requesting rectification or erasure of the data processed
-To: Title and address of the competent authority / Europol
-DD-MM-XXXX,
-Place
-Dear Sir / Madam,
-Pursuant to 37 of Regulation (EU) 2016/794 of the European Parliament and of the Council of 11
-May 2016 on the European Union Agency for Law Enforcement Cooperation (Europol), amended
-by Regulation (EU) 2022/991 of the European Parliament and of the Council of 8 June 2022, and
-replacing and repealing Council Decisions 2009/371/JHA, 2009/934/JHA, 2009/935/JHA,
-2009/936/JHA and 2009/968/JHA, I ___________________________ (name, surname),
-________________ (nationality), ____________________________ (date and place of birth),
-___________________________ (address), would like to request correction of factually
-inaccurate data relating to me or deletion of data relating to me which have been unlawfully held
-by Europol. My personal data should be corrected/deleted because:
-_______________________________________________________________________________
-_
-_______________________________________________________________________________
-_
-_______________________________________________________________________________
-_ ________________________________________
-Please find enclosed:
-1. Copy of a valid identity document under the national law of the State (passport/identity card/driving
-licence (other valid identity document);
-2. Copy of the legal authorisation to represent the applicant;
-3. Other.
-The Applicant/The Legal Representative
----------------------------------------------
-(Signature)
-26
-Coordinated Supervision Committee - A Guide for exercising data subjects’ rights
-July 2023
+1(3)
+Expressen Lifestyle AB
+105 44 Stockholm
+Diarienummer:
+DI-2019-6523
+Tillsyn enligt dataskyddsförordningen
+Datum:
+– Expressen Lifestyle AB
+2023-06-26
+Integritetsskyddsmyndighetens beslut
+Integritetsskyddsmyndigheten konstaterar att Expressen Lifestyle AB (556025-4525),
+har behandlat personuppgifter i strid med artikel 13.1 c i dataskyddsförordningen
+genom att ange felaktig rättslig grund för behandlingen av de registrerades
+personuppgifter under maj 2018 fram till den 4 juni 2019.
+Integritetsskyddsmyndigheten ger Expressen Lifestyle AB en reprimand enligt artikel
+58.2 b i dataskyddsförordningen för överträdelse av 13.1 c i dataskyddsförordningen.
+Redogörelse för tillsynsärendet
+Integritetsskyddsmyndigheten (IMY) inledde den 4 juni 2019 en tillsyn mot Bonnier
+Magazine and Brands AB. Tillsynen var inte föranledd av något klagomål utan syftade
+till att granska om de samtycken som inhämtas för att uppfylla skyldigheten att ha en
+rättslig grund enligt artikel 6.1 i dataskyddsförordningen levde upp till kraven i
+dataskyddsförordningen på frivillighet, information och tydlighet samt att den rättsliga
+grunden tydligt framgår. Bonnier Magazine and Brands AB hade vid tillsynens
+inledande en kryssruta på sin webbsida tillsammans med texten. ”Jag godkänner
+prenumerationsvillkoren. Därmed samtycker jag till personuppgiftsbehandling inom
+Bonnierkoncernen.”
+I sitt yttrande till IMY har Bonnier Magazines and Brands uppgett att informationen i
+registreringsflödet i bolagets webbshop, Magasinshoppen, av misstag inte uppdaterats
+på samma vis som på övriga webbsidor. I och med dataskyddsförordningens
+ikraftträdande 2018 genomförde Bonnier Magazine and Brands AB ett omfattande
+arbete som bland annat innebar att bolaget omvärderade sin lagliga grund för
+behandling av personuppgifter. I stället för samtycke grundar Bonnier Magazine and
+Brands AB sin behandling av kunders personuppgifter huvudsakligen på de rättsliga
+Postadress: grunderna i artikel 6.1 b i dataskyddsförordningen, avtal, eller i artikel 6.1 f i
+Box 8114 dataskyddsförordningen, berättigat intresse. I det normala registreringsflöde som
+104 20 Stockholm används på Bonnier Magazine and Brands AB:s webbsidor ombeds kunden att
+Webbplats: godkänna prenumerationsvillkoren och bekräfta att hen har tagit del av Bonnier
+www.imy.se Magazine and Brands AB:s dataskyddspolicy. Bonnier Magazines and Brands AB har
+E-post: uppgett att man omedelbart när IMY inledde tillsynen vidtagit åtgärder för att
+imy@imy.se uppdatera Magasinshoppen med korrekt information i registreringsflödet.
+Telefon:
+08-657 61 00
+Integritetsskyddsmyndigheten Diarienummer: DI-2019-6523 2(3)
+Datum: 2023-06-26
+Bonnier Magazines and Brands AB har genom fusion upplösts den 1 juni 2022 och
+gått upp i Expressen Lifestyle AB (556025-4525).
+Motivering av beslutet
+Av 23 kap. 1 § aktiebolagslagen (2005:551) följer att en fusions verkningar innebär att
+samtliga tillgångar och skulder övertas av ett annat bolag vid fusionstidspunkten. Det
+övertagande bolaget är därför ansvarig för de förpliktelser som fanns i det bolag som
+tagits över. Mot bakgrund av detta gör IMY bedömningen att det övertagande bolaget
+efter fusionstidspunkten är part i IMY:s tillsynsärende och denna tillsyn riktar sig därför
+mot Expressen Lifestyle AB.
+När en personuppgiftsansvarig samlar in personuppgifter från en registrerad ska
+information gällande den rättsliga grunden för behandlingen framgå, enligt artikel 13.1
+c i dataskyddsförordningen. Den personuppgiftsansvariga ska enligt artikel 12.1 i
+dataskyddsförordningen vidta åtgärder för att till den registrerade tillhandahålla denna
+information i en koncis, klar och tydlig, begriplig och lätt tillgänglig form, med
+användningen av ett klart och tydligt språk. IMY anser att texten bredvid kryssrutan på
+bolagets webbsida ”Jag godkänner prenumerationsvillkoren. Därmed samtycker jag till
+personuppgiftsbehandling inom Bonnierkoncernen”, ger den registrerade intryck av att
+bolagets rättsliga grund för behandling av personuppgifter är samtycke enligt artikel
+6.1. a i dataskyddsförordningen. Den informationstext som fanns under länken med
+texten om prenumerationsvillkoren förstärker detta ytterligare genom formuleringen
+”Vid beställning samtycker du till att dina personuppgifter inklusive e-postadress,
+mobiltelefonnummer för samtal och sms-meddelanden och eventuella andra digitala
+adresser, får lagras och användas inom Bonnier för digitala tjänster, marknadsföring,
+samt för statistik- och analysändamål.”. Vidare lämnas på samma ställe information
+om villkoren för samtycke inklusive rätten att återkalla samtycket.
+Bolaget har uppgett att bolaget inte grundar sin behandling av kunders personuppgifter
+på samtycke utan huvudsakligen på de rättsliga grunderna avtal eller berättigat
+intresse enligt artikel 6.1 b och f i dataskyddsförordningen.
+IMY konstaterar mot den bakgrunden att bolaget behandlat personuppgifter i strid med
+artikel 13.1 c i dataskyddsförordningen genom att ange felaktig rättslig grund för
+behandlingen av registrerades personuppgifter.
+Val av ingripande
+Av artikel 58.2 och artikel 83.2 i dataskyddsförordningen framgår att IMY har
+befogenhet att påföra administrativa sanktionsavgifter i enlighet med artikel 83.
+Beroende på omständigheterna i det enskilda fallet ska administrativa sanktions-
+avgifter påföras utöver eller i stället för de andra åtgärder som avses i artikel 58.2, som
+till exempel förelägganden och förbud. Vidare framgår av artikel 83.2 vilka faktorer
+som ska beaktas vid beslut om administrativa sanktionsavgifter ska påföras och vid
+bestämmande av avgiftens storlek. Om det är fråga om en mindre överträdelse får IMY
+enligt vad som anges i skäl 148 i stället för att påföra en sanktionsavgift utfärda en
+reprimand enligt artikel 58.2 b. Hänsyn ska tas till försvårande och förmildrande
+omständigheter i fallet, såsom överträdelsens karaktär, svårighetsgrad och varaktighet
+samt tidigare överträdelser av relevans.
+IMY konstaterar följande relevanta omständigheter. Bonnier Magazines and Brands
+AB vidtog omedelbart åtgärder när IMY inledde sin tillsyn för att uppdatera
+Integritetsskyddsmyndigheten Diarienummer: DI-2019-6523 3(3)
+Datum: 2023-06-26
+informationen i registreringsflödet på sin webbplats så att den registrerade därefter
+varken mötts av en samtyckesbegäran eller informationstext om samtycke. I stället
+ombeds den registrerade att godkänna prenumerationsvillkoren (dvs köpevillkoren)
+och bekräfta att hen tagit del av bolagets dataskyddspolicy. Webbsidan har inte varit
+den sida som de flesta av bolagets kunder tecknat sina prenumerationer genom.
+Användningen av webbshopen har därför varit begränsad varför endast 1372 kunder
+tecknat sina prenumerationer via denna webbsida under aktuell tidsperiod. Vidare var
+det ett misstag att webbsidan inte uppdaterades i samband med att bolaget såg över
+sina rutiner i samband med dataskyddsföreningens ikraftträdande. IMY bedömer att
+den aktuella bristen inte haft allvarliga konsekvenser för de registrerade. Mot denna
+bakgrund bedömer IMY att det är fråga om en sådan mindre överträdelse i den mening
+som avses i skäl 148 som medför att Expressen Lifestyle AB ska ges en reprimand
+enligt artikel 58.2 b i dataskyddsförordningen för den konstaterade bristen.
+Detta beslut har fattats av enhetschefen Catharina Fernquist efter föredragning av
+juristen Ulrika Bergström.
+Catharina Fernquist, 2023-06-26 (Det här är en elektronisk signatur)
+Hur man överklagar
+Om ni vill överklaga beslutet ska ni skriva till Integritetsskyddsmyndigheten. Ange i
+skrivelsen vilket beslut ni överklagar och den ändring som ni begär. Överklagandet ska
+ha kommit in till Integritetsskyddsmyndigheten senast tre veckor från den dag ni fick
+del av beslutet. Om överklagandet har kommit in i rätt tid sänder
+Integritetsskyddsmyndigheten det vidare till Förvaltningsrätten i Stockholm för
+prövning.
+Ni kan e-posta överklagandet till Integritetsskyddsmyndigheten om det inte innehåller
+några integritetskänsliga personuppgifter eller uppgifter som kan omfattas av
+sekretess. Myndighetens kontaktuppgifter framgår av beslutets första sida.
