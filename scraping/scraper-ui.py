@@ -11,9 +11,12 @@ from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 from openai import OpenAI
 import sys
 import subprocess
+from dotenv import load_dotenv
 
 # ----------------- Logging Setup -----------------
 logging.basicConfig(level=logging.INFO)
+load_dotenv()
+OpenAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # ----------------- Web Scraper Functions -----------------
 
@@ -82,7 +85,7 @@ def extract_text_from_pdf(pdf_path):
 def summarize_text(text):
     """Summarizes extracted text using OpenAI."""
     try:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = OpenAI(api_key=OpenAI_API_KEY)
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -109,7 +112,7 @@ async def download_pdf(url, session, save_path):
     return None
 
 
-async def scraper(url):
+async def fetch_and_process_pdf_links(url):
     """Scrapes a webpage, extracts text, finds PDFs, and summarizes content."""
     # try:
     browser_config = BrowserConfig(
@@ -166,7 +169,7 @@ num_pages = st.number_input("Enter Number of Pages", 1, 20, 3)
 
 async def run_scraper():
     """Runs all scraper tasks asynchronously."""
-    tasks = [scraper(link) for _, link in items]  # Create async tasks
+    tasks = [fetch_and_process_pdf_links(link) for _, link in items]  # Create async tasks
     results = await asyncio.gather(*tasks)  # Run all tasks concurrently
     return results
 
