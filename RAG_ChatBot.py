@@ -31,9 +31,10 @@ from urllib.parse import urljoin
 # ================== Environment Variables ==================
 load_dotenv()
 API_KEY = os.getenv("TOGETHER_API_KEY")
-API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 MONGO_URI = os.getenv("MongoDB")
-OpenAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GROK_API_KEY = os.getenv("GROK_API_KEY")
 
 
 # =================== Connections ============================
@@ -49,7 +50,8 @@ MODEL_PRICING = {
     "databricks/dbrx-instruct": "$1.20",
     "microsoft/WizardLM-2-8x22B": "$1.20",
     "mistralai/Mixtral-8x22B-Instruct-v0.1": "$1.20",
-    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": "$0.60"
+    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": "$0.60",
+    
 }
 
 AVAILABLE_MODELS = list(MODEL_PRICING.keys())
@@ -127,19 +129,50 @@ def process_pdf(file, filename):
 # Together.AI Integration
 def generate_response(prompt, context, model, temp, top_p):
     system_prompt = st.session_state.config["system_prompt"]
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": f"{system_prompt}"},
+    if model == "grok-3":
+        if not GROK_API_KEY:
+            raise ValueError("Missing xAI API Key. Set the GROK_API_KEY environment variable.")
+
+        # Define the API endpoint and headers
+        url = "https://api.x.ai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {GROK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        # Construct the payload based on the xAI Grok API
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
             ],
-            temperature=temp,
-            top_p=top_p
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Error generating response: {str(e)}"
+            "temperature": temp,
+            "top_p": top_p,
+            "stream": False
+        }
+        try:
+            # Send the POST request to the xAI API
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
+            return response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+        except requests.exceptions.RequestException as e:
+            print(f"Error communicating with xAI API: {e}")
+            return ""
+    else:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": f"{system_prompt}"},
+                    {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
+                ],
+                temperature=temp,
+                top_p=top_p
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            return f"Error generating response: {str(e)}"
 
 # ================== Database Connection ==================
 # RAG Pipeline
@@ -327,7 +360,7 @@ def get_all_items(base_url, listing_endpoint, pagination_format, num_pages):
 def summarize_text(text):
     """Summarizes extracted text using OpenAI."""
     try:
-        client = OpenAI(api_key=OpenAI_API_KEY)
+        client = OpenAI(api_key=OPENAI_API_KEY)
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -408,6 +441,8 @@ async def main(urls):
     """Scrape multiple pages concurrently."""
     results = await asyncio.gather(*[extract_info(url) for url in urls])
     return results
+
+
 # =================== Streamlit UI ============================
 st.title("📄 AI Document Q&A and Web Scraper")
 
@@ -423,11 +458,17 @@ with st.sidebar:
             AVAILABLE_MODELS,
             default=AVAILABLE_MODELS[:3],
         )
-
+    
         with st.expander("Model Pricing"):
             for model, price in MODEL_PRICING.items():
                 st.write(f"**{model.split('/')[-1]}**: {price}")
 
+        # Grok-3 Integration
+        use_grok = st.checkbox("Use Grok-3 Model", value=True)
+        if use_grok:
+            st.session_state.config["selected_models"].append("grok-3")
+
+                
         st.session_state.config["vary_temperature"] = st.checkbox("Vary Temperature", value=True)
         st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
         st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, 0.5, 0.05)
