@@ -249,19 +249,6 @@ def retrieve_context(query, top_k=15):
 
 
 # ========= PDFs Link Extraction via URL =========
-async def download_pdf(url, session, save_path):
-    """Downloads a PDF file asynchronously."""
-    try:
-        async with session.get(url) as response:
-            if response.status == 200:
-                with open(save_path, 'wb') as f:
-                    f.write(await response.read())
-                return save_path
-    except Exception as e:
-        logging.error(f"Error downloading {url}: {e}")
-    return None
-
-
 def get_page_items(url, base_url, listing_endpoint):
     """Extracts all item links from a page."""
     try:
@@ -319,8 +306,6 @@ def summarize_text(text):
         return "Summarization failed."
 
 # =================== Try another way ============================
-
-
 async def fetch_page(url):
     """Fetch page content asynchronously."""
     async with httpx.AsyncClient() as client:
@@ -394,7 +379,6 @@ def delete_all_files():
 # -----------------------------------------------------------------------------
 # File Deletion Functions
 # -----------------------------------------------------------------------------
-
 async def store_in_DB(pdf_links):
     async with aiohttp.ClientSession() as session:
         for pdf_link in pdf_links:
@@ -486,23 +470,25 @@ with st.sidebar:
                     summary_file = f"summaries/summary_{i+1}.txt"
                     text_file = f"texts/text_{i+1}.txt"
 
-                    with open(summary_file, "w", encoding="utf-8") as sf:
-                        sf.write(summary)
+                    # with open(summary_file, "w", encoding="utf-8") as sf:
+                    #     sf.write(summary)
 
-                    with open(text_file, "w", encoding="utf-8") as tf:
-                        tf.write("\n".join(extracted_texts))
+                    # with open(text_file, "w", encoding="utf-8") as tf:
+                    #     tf.write("\n".join(extracted_texts))
 
                     pdf_links.extend(pdf_links)
                     
                     if pdf_links:
                         st.write("**Extracted PDFs:**")
                         for pdf in pdf_links:
-                            st.markdown(f"[Download PDF]({pdf})")
+                            st.markdown(pdf)
             else:
                 st.warning("No items found.")
 
             if pdf_links:
                 asyncio.run(store_in_DB(pdf_links))
+
+            print(db.list_collection_names())
 
     with tab3:
         # Display Stored Files in MongoDB
