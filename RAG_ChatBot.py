@@ -29,8 +29,6 @@ from urllib.parse import urljoin
 import pdfplumber
 import google.generativeai as genai
 from google.api_core import exceptions
-import fitz
-from pdfminer.high_level import extract_text as pdfminer_extract
 
 # ================== Environment Variables ==================
 load_dotenv()
@@ -133,52 +131,9 @@ def chunk_text(text, chunk_size=400, min_chunk_length=20):
     return chunks
 
 
-def extract_text(uploaded_file):
-    if uploaded_file is None:
-        return ""  # Handle case when no file is uploaded
-
-    text = ""
-
-    try:
-        file_bytes = io.BytesIO(uploaded_file.read())  # Ensure we work with a file-like object
-        
-        # **Method 1: pdfplumber**
-        file_bytes.seek(0)
-        with pdfplumber.open(file_bytes) as pdf:
-            text = ''.join([page.extract_text() or " " for page in pdf.pages])
-
-    except Exception as e:
-        st.error(f"An error occurred with pdfplumber: {e}")
-
-    # **Method 2: PyPDF2 (fallback if pdfplumber fails)**
-    if not text:
-        try:
-            file_bytes.seek(0)
-            reader = PyPDF2.PdfReader(file_bytes)
-            text = ''.join([page.extract_text() or " " for page in reader.pages])
-
-        except Exception as e:
-            st.error(f"An error occurred with PyPDF2: {e}")
-
-    # **Method 3: PyMuPDF (fitz)**
-    if not text:
-        try:
-            file_bytes.seek(0)
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            text = "".join([page.get_text("text") for page in doc])
-
-        except Exception as e:
-            st.error(f"An error occurred with PyMuPDF: {e}")
-
-    # **Method 4: pdfminer.six (last attempt)**
-    if not text:
-        try:
-            file_bytes.seek(0)
-            text = pdfminer_extract(file_bytes)
-
-        except Exception as e:
-            st.error(f"An error occurred with pdfminer: {e}")
-
+def extract_text(file):
+    reader = PyPDF2.PdfReader(file)
+    text = "".join([page.extract_text() + "\n" for page in reader.pages if page.extract_text()])
     return text
 # ================== Generate Response ==================
 

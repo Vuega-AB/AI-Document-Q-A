@@ -16,4 +16,5 @@ pdfplumber
 crawl4ai
 openai
 pymongo
+pymupdf
 # !playwright install
