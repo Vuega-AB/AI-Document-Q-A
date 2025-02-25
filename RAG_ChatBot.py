@@ -88,10 +88,10 @@ if "config" not in st.session_state:
     st.session_state.config = {
         "temperature": 0.7,
         "top_p": 0.9,
-        "system_prompt": "You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.'",
+        "system_prompt": "You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.",
         "stored_pdfs": [],
         "text_chunks": [],
-        "selected_models": AVAILABLE_MODELS[:1],
+        "selected_models": AVAILABLE_MODELS[:3],
         "vary_temperature": True,
         "vary_top_p": False
     }
@@ -427,7 +427,7 @@ with st.sidebar:
 
     with tab1:
         st.header("Configuration")
-        # st.session_state.config = {}
+        st.session_state.config = {}
         st.session_state.config["selected_models"] = st.multiselect(
             "Select AI Models (Up to 3)", 
             AVAILABLE_MODELS,
@@ -447,8 +447,7 @@ with st.sidebar:
         st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
         st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, 0.5, 0.05)
         st.session_state.config["top_p"] = st.slider("Top-P", 0.0, 1.0, 0.9, 0.05)
-        print(st.session_state.config["system_prompt"])
-        st.text_area("System Prompt", value=st.session_state.config("system_prompt"))
+        st.session_state.config["system_prompt"] = st.text_area("System Prompt", value="You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.")
 
         config_file = st.file_uploader("Upload Configuration", type=['json'])
         if config_file:
