@@ -15,4 +15,5 @@ asyncio
 pdfplumber
 crawl4ai
 openai
+pymongo
 # !playwright install
