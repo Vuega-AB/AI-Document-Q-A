@@ -39,7 +39,6 @@ TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 # MONGO_URI = os.getenv("MongoDB")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GROK_API_KEY = os.getenv("GROK_API_KEY")
 DROPBOX_REFRESH_TOKEN = os.getenv("DROPBOX_REFRESH_TOKEN")
 DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY")
 DROPBOX_APP_SECRET = os.getenv("DROPBOX_APP_SECRET")
@@ -56,11 +55,6 @@ TOKEN_FILE = "dropbox_token.json"
 genai.configure(api_key=GOOGLE_API_KEY)
 gemini_model = genai.GenerativeModel("gemini-2.0-flash")
 
-# MongoDB Connection
-# mongo_client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
-# db = mongo_client["userembeddings"]
-# collection = db["embeddings"]
-
 client = Together(api_key=TOGETHER_API_KEY)
 
 try:
@@ -72,14 +66,14 @@ except Exception as e:
 
 # Available Together.AI models
 AVAILABLE_MODELS_DICT = {
+    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
+    "openai-4o": {"price": "Custom", "type": "openai"},
     "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
     "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},
     "databricks/dbrx-instruct": {"price": "$1.20", "type": "together"},
     "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
     "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
-    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
-    "openai-4o": {"price": "Custom", "type": "openai"}
 }
 
 AVAILABLE_MODELS = list(AVAILABLE_MODELS_DICT.keys())
@@ -298,50 +292,19 @@ def generate_response_gemini(prompt, context, temp, top_p):
 # Together.AI Integration
 def generate_response(prompt, context, model, temp, top_p):
     system_prompt = st.session_state.config["system_prompt"]
-    if model == "grok-3":
-        if not GROK_API_KEY:
-            raise ValueError("Missing xAI API Key. Set the GROK_API_KEY environment variable.")
-
-        # Define the API endpoint and headers
-        url = "https://api.x.ai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {GROK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        # Construct the payload based on the xAI Grok API
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": f"{system_prompt}"},
                 {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
             ],
-            "temperature": temp,
-            "top_p": top_p,
-            "stream": False
-        }
-        try:
-            # Send the POST request to the xAI API
-            response = requests.post(url, headers=headers, json=payload)
-            response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
-            return response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-        except requests.exceptions.RequestException as e:
-            print(f"Error communicating with xAI API: {e}")
-            return ""
-    else:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": f"{system_prompt}"},
-                    {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
-                ],
-                temperature=temp,
-                top_p=top_p
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            return f"Error generating response: {str(e)}"
+            temperature=temp,
+            top_p=top_p
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error generating response: {str(e)}"
         
 #openAi
 def generate_response_openAi(prompt, context, temp, top_p):
@@ -350,7 +313,7 @@ def generate_response_openAi(prompt, context, temp, top_p):
         # truncated_context = context[:max_context_tokens]
         
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {"role": "developer", "content": st.session_state.config["system_prompt"]},
                 {"role": "user", "content": f"Context: {context}\n\nQuestion: {prompt}"}
@@ -572,15 +535,11 @@ with st.sidebar:
             for model, details in AVAILABLE_MODELS_DICT.items():
                 st.write(f"**{model.split('/')[-1]}**: {details['price']}")
 
-        # Grok-3 Integration
-        use_grok = st.checkbox("Use Grok-3 Model", value=True)
-        if use_grok:
-            st.session_state.config["selected_models"].append("grok-3")
                 
-        st.session_state.config["vary_temperature"] = st.checkbox("Vary Temperature", value=True)
-        st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
-        st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, 0.5, 0.05)
-        st.session_state.config["top_p"] = st.slider("Top-P", 0.0, 1.0, 0.9, 0.05)
+        st.session_state.config["vary_temperature"] = st.checkbox("Vary Temperature", value=st.session_state.config.get("vary_temperature", False))
+        st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=st.session_state.config.get("vary_top_p", False))
+        st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, value=st.session_state.config.get("temperature", 0.5), step=0.05)
+        st.session_state.config["top_p"] = st.slider("Top-P", 0.0, 1.0, value=st.session_state.config.get("top_p", 0.5), step = 0.05)
         st.session_state.config["system_prompt"] = st.text_area("System Prompt", value=st.session_state.config.get("system_prompt", ""))
 
         config_file = st.file_uploader("Upload Configuration", type=['json'])
