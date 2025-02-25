@@ -9,6 +9,7 @@ import asyncio
 import PyPDF2
 import io
 import faiss
+import time
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from langdetect import detect
@@ -27,34 +28,51 @@ import asyncio
 import httpx
 import aiofiles
 from urllib.parse import urljoin
+import pdfplumber
+import google.generativeai as genai
+from google.api_core import exceptions
 
 # ================== Environment Variables ==================
 load_dotenv()
 API_KEY = os.getenv("TOGETHER_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-MONGO_URI = os.getenv("MongoDB")
+MONGO_URI = os.getenv("MONGO_URI") or os.getenv("MongoDB")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GROK_API_KEY = os.getenv("GROK_API_KEY")
 
 
 # =================== Connections ============================
+# Configure Gemini (Google Generative AI)
+genai.configure(api_key=GOOGLE_API_KEY)
+gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+
+# MongoDB Connection
 mongo_client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
 db = mongo_client["userembeddings"]
 collection = db["embeddings"]
+
 client = Together(api_key=API_KEY)
 
+# Initialize FAISS and Embedding Model
+def initialize_vector_db():
+    model_local = SentenceTransformer("all-MiniLM-L6-v2")
+    index = faiss.IndexFlatL2(384)
+    return model_local, index
+
+embedding_model, faiss_index = initialize_vector_db()
+
 # Available Together.AI models
-MODEL_PRICING = {
-    "meta-llama/Llama-3.3-70B-Instruct-Turbo": "$0.88",
-    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": "$3.50",
-    "databricks/dbrx-instruct": "$1.20",
-    "microsoft/WizardLM-2-8x22B": "$1.20",
-    "mistralai/Mixtral-8x22B-Instruct-v0.1": "$1.20",
-    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": "$0.60",
-    
+AVAILABLE_MODELS_DICT = {
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
+    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},
+    "databricks/dbrx-instruct": {"price": "$1.20", "type": "together"},
+    "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
+    "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
+    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
+    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"}
 }
 
-AVAILABLE_MODELS = list(MODEL_PRICING.keys())
+AVAILABLE_MODELS = list(AVAILABLE_MODELS_DICT.keys())
 
 # Initialize session state
 if "messages" not in st.session_state:
@@ -76,7 +94,6 @@ def save_config(config):
     json_bytes = json.dumps(config, indent=4).encode('utf-8')
     return BytesIO(json_bytes)
 
-# Function to load config from an uploaded JSON file
 def load_config(uploaded_file):
     try:
         config_data = json.load(uploaded_file)
@@ -85,46 +102,61 @@ def load_config(uploaded_file):
     except Exception as e:
         st.sidebar.error(f"Failed to load configuration: {e}")
 
-# ================== FAISS and Sentence Transformer Initialization ==================
-def initialize_vector_db():
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    index_file = "faiss_index.index"
-
-    if os.path.exists(index_file):
-        try:
-            index = faiss.read_index(index_file)
-            print("FAISS index loaded successfully!")
-        except Exception as e:
-            print(f"Error loading FAISS index: {e}")
-            index = faiss.IndexFlatL2(384)
-    else:
-        index = faiss.IndexFlatL2(384)
-
-    return model, index
-
-# Initialize FAISS and embedding model at startup
-embedding_model, faiss_index = initialize_vector_db()
-
-# Load stored text chunks
-text_chunks_file = "text_chunks.json"
-if os.path.exists(text_chunks_file):
-    with open(text_chunks_file, "r") as f:
-        st.session_state.config["text_chunks"] = json.load(f)
-
 # ================== Helper Functions ==================
 
-# PDF Processing Functions
-def extract_text(file):
-    reader = PyPDF2.PdfReader(file)
-    text = "".join([page.extract_text() + "\n" for page in reader.pages if page.extract_text()])
+def extract_text(uploaded_file):
+    text = ""
+    try:
+        file_bytes = io.BytesIO(uploaded_file.getvalue())
+        with pdfplumber.open(file_bytes) as pdf:
+            text = ''.join([page.extract_text() or " " for page in pdf.pages])
+    except Exception as e:
+        st.error(f"An error occurred with pdfplumber: {e}")
+    if not text:
+        try:
+            file_bytes.seek(0)
+            reader = PyPDF2.PdfReader(file_bytes)
+            text = ''.join([page.extract_text() or " " for page in reader.pages])
+        except Exception as e:
+            st.error(f"An error occurred with PyPDF2: {e}")
     return text
 
-def process_pdf(file, filename):
+# ================== Generate Response ==================
+def update_vector_db(texts, filename="uploaded"):
+    if not texts:
+        return
+    embeddings = embedding_model.encode(texts).tolist()
+    documents = [{"filename": filename, "text": text, "embedding": emb} for text, emb in zip(texts, embeddings)]
+    collection.insert_many(documents)
+    faiss_index.add(np.array(embeddings, dtype="float32"))
+
+def process_pdf(file, filename="uploaded"):
     text = extract_text(file)
-    # Chunk the text into pieces
     chunks = chunk_text(text)
-    st.session_state.config["text_chunks"].extend(chunks)
     update_vector_db(chunks, filename)
+    return chunks
+
+def generate_response_gemini(prompt, context, temp, top_p):
+    system_prompt = st.session_state.config["system_prompt"]
+    input_parts = [system_prompt + "\n" + context, prompt]
+    generation_config = genai.GenerationConfig(
+        max_output_tokens=2048,
+        temperature=temp,
+        top_p=top_p,
+        top_k=32
+    )
+    retries = 3
+    for attempt in range(retries):
+        try:
+            response = gemini_model.generate_content(input_parts, generation_config=generation_config)
+            return response.text
+        except exceptions.ResourceExhausted:
+            st.warning(f"API quota exceeded. Retrying... ({attempt+1}/{retries})")
+            time.sleep(5)
+        except Exception as e:
+            return f"Error generating response: {str(e)}"
+    st.error("API quota exceeded. Please try again later.")
+    return "Error generating response."
 
 # Together.AI Integration
 def generate_response(prompt, context, model, temp, top_p):
@@ -179,74 +211,41 @@ def generate_response(prompt, context, model, temp, top_p):
 def retrieve_context(query, top_k=15):
     query_embedding = embedding_model.encode([query]).tolist()[0]
     stored_docs = list(collection.find({}, {"_id": 0, "embedding": 1, "text": 1}))
-
     if not stored_docs:
         return []
-
     embeddings = np.array([doc["embedding"] for doc in stored_docs], dtype="float32")
     texts = [doc["text"] for doc in stored_docs]
-
     if faiss_index.ntotal == 0:
         faiss_index.add(np.array(embeddings, dtype="float32"))
-
-    top_k = min(top_k, len(texts))  # Avoid requesting more results than available
+    top_k = min(top_k, len(texts))
     distances, indices = faiss_index.search(np.array([query_embedding], dtype="float32"), top_k)
-
-    # Remove duplicates from results
     seen = set()
     unique_texts = []
     for i in indices[0]:
         if i < len(texts) and texts[i] not in seen:
             seen.add(texts[i])
             unique_texts.append(texts[i])
-
     return unique_texts
 
 
 def chunk_text(text, chunk_size=400, min_chunk_length=20):
-    paragraphs = re.split(r'\n{2,}', text)  # Split by paragraphs
+    paragraphs = re.split(r'\n{2,}', text)
     chunks = []
-    
     for para in paragraphs:
-        sentences = re.split(r'(?<=[.!?])\s+', para)  # Split paragraph into sentences
+        sentences = re.split(r'(?<=[.!?])\s+', para)
         temp_chunk = ""
-
         for sentence in sentences:
             if len(temp_chunk) + len(sentence) < chunk_size:
                 temp_chunk += sentence + " "
             else:
                 cleaned_chunk = temp_chunk.strip()
-                if len(cleaned_chunk) >= min_chunk_length:  # Remove very short chunks
+                if len(cleaned_chunk) >= min_chunk_length:
                     chunks.append(cleaned_chunk)
-                temp_chunk = sentence + " "  # Start a new chunk
-        
+                temp_chunk = sentence + " "
         cleaned_chunk = temp_chunk.strip()
-        if len(cleaned_chunk) >= min_chunk_length:  # Append remaining text if valid
+        if len(cleaned_chunk) >= min_chunk_length:
             chunks.append(cleaned_chunk)
-
     return chunks
-
-def delete_file(filename):
-    """Delete a specific file and its embeddings from MongoDB."""
-    collection.delete_many({"filename": filename})
-    st.session_state.file_uploader_key += 1  # Reset file uploader
-    st.rerun()
-
-def delete_all_files():
-    """Delete all files from MongoDB and FAISS."""
-    collection.drop()
-    st.session_state.stored_pdfs = []
-    st.session_state.file_uploader_key += 1  # Reset file uploader
-    st.rerun()
-
-# **Store FAISS Embeddings in MongoDB**
-def update_vector_db(texts, filename):
-    embeddings = embedding_model.encode(texts).tolist()
-    documents = [{"filename": filename, "text": text, "embedding": emb} for text, emb in zip(texts, embeddings)]
-    collection.insert_many(documents)
-    faiss_index.add(np.array(embeddings, dtype="float32"))
-    # Optionally, save the faiss index to disk:
-    # faiss.write_index(faiss_index, "faiss.index")
 
 # ========= PDFs Link Extraction via URL =========
 try:
@@ -442,13 +441,44 @@ async def main(urls):
     results = await asyncio.gather(*[extract_info(url) for url in urls])
     return results
 
+# -----------------------------------------------------------------------------
+# File Deletion Functions
+# -----------------------------------------------------------------------------
+def delete_file(filename):
+    collection.delete_many({"filename": filename})
+    st.rerun()
+
+def delete_all_files():
+    collection.drop()
+    st.rerun()
+
+# -----------------------------------------------------------------------------
+# File Deletion Functions
+# -----------------------------------------------------------------------------
+
+async def store_in_DB(pdf_links):
+    async with aiohttp.ClientSession() as session:
+        for pdf_link in pdf_links:
+            try:
+                async with session.get(pdf_link) as response:
+                    if response.status == 200:
+                        pdf_bytes = await response.read()
+                        pdf_file = BytesIO(pdf_bytes)
+                        filename = os.path.basename(pdf_link)
+                        process_pdf(pdf_file, filename)
+                        st.success(f"Processed PDF: {filename}")
+                    else:
+                        st.error(f"Failed to download PDF: {pdf_link}")
+            except Exception as e:
+                st.error(f"Error processing {pdf_link}: {e}")
+    st.success("Finished processing all PDF links.")
 
 # =================== Streamlit UI ============================
 st.title("📄 AI Document Q&A and Web Scraper")
 
 # Sidebar with Tabs
 with st.sidebar:
-    tab1, tab2 = st.tabs(["Configuration", "Web Scraper"])
+    tab1, tab2, tab3 = st.tabs(["Configuration", "Web Scraper", "Database"])
 
     with tab1:
         st.header("Configuration")
@@ -460,14 +490,13 @@ with st.sidebar:
         )
     
         with st.expander("Model Pricing"):
-            for model, price in MODEL_PRICING.items():
-                st.write(f"**{model.split('/')[-1]}**: {price}")
+            for model, details in AVAILABLE_MODELS_DICT.items():
+                st.write(f"**{model.split('/')[-1]}**: {details['price']}")
 
         # Grok-3 Integration
         use_grok = st.checkbox("Use Grok-3 Model", value=True)
         if use_grok:
             st.session_state.config["selected_models"].append("grok-3")
-
                 
         st.session_state.config["vary_temperature"] = st.checkbox("Vary Temperature", value=True)
         st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
@@ -510,8 +539,9 @@ with st.sidebar:
                 urls = [link for _, link in items]
                 with st.spinner("Scraping in progress..."):
                     scrape_results = asyncio.run(main(urls))
-                    print(scrape_results)
+                    # print(scrape_results)
 
+                pdf_links = []
                 # Save summaries and extracted texts to files
                 for i, (summary, pdf_links, extracted_texts) in enumerate(scrape_results):
                     summary_file = f"summaries/summary_{i+1}.txt"
@@ -523,9 +553,8 @@ with st.sidebar:
                     with open(text_file, "w", encoding="utf-8") as tf:
                         tf.write("\n".join(extracted_texts))
 
-                    # st.download_button("Download Summary", data=open(summary_file, "rb"), file_name=summary_file)
-                    # st.download_button("Download Extracted Text", data=open(text_file, "rb"), file_name=text_file)
-
+                    pdf_links.extend(pdf_links)
+                    
                     if pdf_links:
                         st.write("**Extracted PDFs:**")
                         for pdf in pdf_links:
@@ -533,21 +562,41 @@ with st.sidebar:
             else:
                 st.warning("No items found.")
 
-# TODO: Database Connection
+            store_in_DB(pdf_links)
+
+    with tab3:
+        # Display Stored Files in MongoDB
+        st.subheader("📂 Stored Files in Database")
+        stored_files = list(collection.distinct("filename"))
+        if stored_files:
+            for filename in stored_files:
+                col1, col2 = st.columns([0.8, 0.2])
+                col1.write(f"📄 {filename}")
+                if col2.button("🗑️ Delete", key=filename):
+                    delete_file(filename)
+            if st.button("🗑️ Delete All Files"):
+                delete_all_files()
+        else:
+            st.info("No files stored in the database.")
+
 # File Uploader for PDFs
-st.header("Upload PDFs")
+st.header("📤 Upload PDFs")
 pdf_files = st.file_uploader("Upload PDF documents", type=["pdf"], accept_multiple_files=True)
 if pdf_files:
     for pdf_file in pdf_files:
-        text_chunks = process_pdf(pdf_file)
-        st.sidebar.success(f"Processed {pdf_file.name}, extracted {len(text_chunks)} text chunks.")
+        chunks = process_pdf(pdf_file, pdf_file.name)
+        st.sidebar.success(f"Processed {pdf_file.name}, extracted {len(chunks)} text chunks.")
 
 # Chat UI with Multiple Models
-st.header("Chat with Documents")
+st.header("💬 Chat with Documents")
 if prompt := st.chat_input("Ask a question"):
-    context_indices = retrieve_context(prompt)
-    context = " ".join([st.session_state.config["text_chunks"][i] for i in context_indices]) if context_indices else "No relevant context found."
-
+    try:
+        lang = detect(prompt)
+    except Exception:
+        lang = "en"
+    retrieved_context = retrieve_context(prompt)
+    context = " ".join(retrieved_context) if retrieved_context else "No relevant context found."
+    
     tabs = st.tabs([model.split("/")[-1] for model in st.session_state.config["selected_models"]])
 
     temp_values = [0, st.session_state.config["temperature"] / 3, st.session_state.config["temperature"]]
@@ -570,7 +619,10 @@ if prompt := st.chat_input("Ask a question"):
                 for top_p in top_p_values if st.session_state.config["vary_top_p"] else [st.session_state.config["top_p"]]:
                     with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
                         response = generate_response(prompt, context, model, temp, top_p)
-
+                        if model == "together":
+                            response = generate_response(prompt, context, model, temp, top_p)
+                        elif model == "gemini":
+                            response = generate_response_gemini(prompt, context, temp, top_p)
                     # Enhanced UI with clear separation
                     st.markdown(f"""
                         <div style="
