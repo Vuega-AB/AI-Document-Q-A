@@ -261,13 +261,15 @@ def get_page_items(url, base_url, listing_endpoint):
 
         for item in soup.find_all("a"):
             link = item.get("href")
-            title = item.text.strip()
+            # title = item.text.strip()
             if link and f"/{listing_endpoint}/" in link and link != url and not link.endswith("/rss"):
                 if not link.startswith("http"):
                     link = base_url + link
-                items.add((title, link))
+                items.add(link)
+            
 
         return list(items)
+    
     except Exception as e:
         logging.error(f"Error scraping {url}: {e}")
         return []
@@ -289,21 +291,21 @@ def get_all_items(base_url, listing_endpoint, pagination_format, num_pages):
     return list(all_items)
 
 
-def summarize_text(text):
-    """Summarizes extracted text using OpenAI."""
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Summarize the following text into a concise paragraph."},
-                {"role": "user", "content": text}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        logging.error(f"Error in summarization: {e}")
-        return "Summarization failed."
+# def summarize_text(text):
+#     """Summarizes extracted text using OpenAI."""
+#     try:
+#         client = OpenAI(api_key=OPENAI_API_KEY)
+#         response = client.chat.completions.create(
+#             model="gpt-4o-mini",
+#             messages=[
+#                 {"role": "system", "content": "Summarize the following text into a concise paragraph."},
+#                 {"role": "user", "content": text}
+#             ]
+#         )
+#         return response.choices[0].message.content
+#     except Exception as e:
+#         logging.error(f"Error in summarization: {e}")
+#         return "Summarization failed."
 
 # =================== Try another way ============================
 async def fetch_page(url):
@@ -331,34 +333,33 @@ async def extract_info(url):
     html, base_url = await fetch_page(url)
     soup = BeautifulSoup(html, "html.parser")
 
-    # Extract paragraphs
-    paragraphs = "\n".join(p.get_text() for p in soup.find_all("p"))
-    print(f"Text from {url}:\n{paragraphs[:300]}...")
+    # # Extract paragraphs
+    # paragraphs = "\n".join(p.get_text() for p in soup.find_all("p"))
+    # print(f"Text from {url}:\n{paragraphs[:300]}...")
 
     # Extract PDF links and convert relative to absolute URLs
     pdf_links = [urljoin(base_url, a["href"]) for a in soup.find_all("a", href=True) if ".pdf" in a["href"].lower()]
-    print(f"Found {len(pdf_links)} PDF links on {url}")
 
-    # Download and extract PDF content
-    pdf_texts = []
-    for link in pdf_links:
-        pdf_texts.append(await download_and_extract_pdf(link))
+    # # Download and extract PDF content
+    # pdf_texts = []
+    # for link in pdf_links:
+    #     pdf_texts.append(await download_and_extract_pdf(link))
 
-    return paragraphs, pdf_links, pdf_texts
+    return pdf_links
 
-async def download_and_extract_pdf(url):
-    """Download a PDF and extract text."""
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        filename = url.split("/")[-1]
+# async def download_and_extract_pdf(url):
+#     """Download a PDF and extract text."""
+#     async with httpx.AsyncClient() as client:
+#         response = await client.get(url)
+#         filename = url.split("/")[-1]
 
-        # Save PDF file
-        async with aiofiles.open(filename, "wb") as f:
-            await f.write(response.content)
-        print(f"Downloaded: {filename}")
+#         # Save PDF file
+#         async with aiofiles.open(filename, "wb") as f:
+#             await f.write(response.content)
+#         print(f"Downloaded: {filename}")
 
-        # Extract text from PDF
-        return extract_text(filename)
+#         # Extract text from PDF
+#         return extract_text(filename)
 
 async def main(urls):
     """Scrape multiple pages concurrently."""
@@ -441,7 +442,7 @@ with st.sidebar:
         base_url = st.text_input("Enter Base URL", "https://www.imy.se")
         listing_endpoint = st.text_input("Enter Listing Endpoint", "tillsyner")
         pagination_format = st.text_input("Enter Pagination Format", "?query=&page=")
-        num_pages = st.number_input("Enter Number of Pages", 1, 20, 3)
+        num_pages = st.number_input("Enter Number of Pages", 1, 10, 3)
 
         if st.button("Start Scraping"):
 
@@ -449,46 +450,32 @@ with st.sidebar:
                 asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
             with st.spinner("Scraping in progress..."):
-                items = get_all_items(base_url, listing_endpoint, pagination_format, num_pages)
+                urls = get_all_items(base_url, listing_endpoint, pagination_format, num_pages)
 
-            if items:
-                st.success(f"Found {len(items)} items!")
-
-                # Debugging
-                for title, link in items:
-                    print(link)
+            if urls:
+                st.success(f"Found {len(urls)} items!")
 
                 scrape_results = []
-                urls = [link for _, link in items]
                 with st.spinner("Scraping in progress..."):
                     scrape_results = asyncio.run(main(urls))
-                    # print(scrape_results)
 
-                pdf_links = []
-                # Save summaries and extracted texts to files
-                for i, (summary, pdf_links, extracted_texts) in enumerate(scrape_results):
-                    summary_file = f"summaries/summary_{i+1}.txt"
-                    text_file = f"texts/text_{i+1}.txt"
+                pdf_links = set()  # Use a set to store unique links
+                for i, extracted_data in enumerate(scrape_results):
+                    pdf_links.update(extracted_data)
 
-                    # with open(summary_file, "w", encoding="utf-8") as sf:
-                    #     sf.write(summary)
+                # Convert set back to list
+                pdf_links = list(pdf_links)
 
-                    # with open(text_file, "w", encoding="utf-8") as tf:
-                    #     tf.write("\n".join(extracted_texts))
+                if pdf_links:
+                    st.write("**Extracted PDFs:**")
+                    for pdf in pdf_links:
+                        st.markdown(pdf)
 
-                    pdf_links.extend(pdf_links)
-                    
-                    if pdf_links:
-                        st.write("**Extracted PDFs:**")
-                        for pdf in pdf_links:
-                            st.markdown(pdf)
             else:
                 st.warning("No items found.")
 
             if pdf_links:
                 asyncio.run(store_in_DB(pdf_links))
-
-            print(db.list_collection_names())
 
     with tab3:
         # Display Stored Files in MongoDB
@@ -541,13 +528,14 @@ if prompt := st.chat_input("Ask a question"):
                 </div>
             """, unsafe_allow_html=True)
 
+            model_type = AVAILABLE_MODELS_DICT[model]["type"]
             for temp in temp_values if st.session_state.config["vary_temperature"] else [st.session_state.config["temperature"]]:
                 for top_p in top_p_values if st.session_state.config["vary_top_p"] else [st.session_state.config["top_p"]]:
                     with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
                         response = generate_response(prompt, context, model, temp, top_p)
-                        if model == "together":
+                        if model_type == "together":
                             response = generate_response(prompt, context, model, temp, top_p)
-                        elif model == "gemini":
+                        elif model_type == "gemini":
                             response = generate_response_gemini(prompt, context, temp, top_p)
                     # Enhanced UI with clear separation
                     st.markdown(f"""
