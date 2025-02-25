@@ -37,8 +37,6 @@ TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 MONGO_URI = os.getenv("MongoDB")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GROK_API_KEY = os.getenv("GROK_API_KEY")
-
 
 # =================== Connections ============================
 # Configure Gemini (Google Generative AI)
@@ -200,50 +198,50 @@ def generate_response_openAi(prompt, context, temp, top_p):
 # Together.AI Integration
 def generate_response(prompt, context, model, temp, top_p):
     system_prompt = st.session_state.config["system_prompt"]
-    if model == "grok-3":
-        if not GROK_API_KEY:
-            raise ValueError("Missing xAI API Key. Set the GROK_API_KEY environment variable.")
+    # if model == "grok-3":
+    #     if not GROK_API_KEY:
+    #         raise ValueError("Missing xAI API Key. Set the GROK_API_KEY environment variable.")
 
-        # Define the API endpoint and headers
-        url = "https://api.x.ai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {GROK_API_KEY}",
-            "Content-Type": "application/json"
-        }
+    #     # Define the API endpoint and headers
+    #     url = "https://api.x.ai/v1/chat/completions"
+    #     headers = {
+    #         "Authorization": f"Bearer {GROK_API_KEY}",
+    #         "Content-Type": "application/json"
+    #     }
 
-        # Construct the payload based on the xAI Grok API
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
+    #     # Construct the payload based on the xAI Grok API
+    #     payload = {
+    #         "model": model,
+    #         "messages": [
+    #             {"role": "system", "content": system_prompt},
+    #             {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
+    #         ],
+    #         "temperature": temp,
+    #         "top_p": top_p,
+    #         "stream": False
+    #     }
+    #     try:
+    #         # Send the POST request to the xAI API
+    #         response = requests.post(url, headers=headers, json=payload)
+    #         response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
+    #         return response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+    #     except requests.exceptions.RequestException as e:
+    #         print(f"Error communicating with xAI API: {e}")
+    #         return ""
+    # else:
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": f"{system_prompt}"},
                 {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
             ],
-            "temperature": temp,
-            "top_p": top_p,
-            "stream": False
-        }
-        try:
-            # Send the POST request to the xAI API
-            response = requests.post(url, headers=headers, json=payload)
-            response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
-            return response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-        except requests.exceptions.RequestException as e:
-            print(f"Error communicating with xAI API: {e}")
-            return ""
-    else:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": f"{system_prompt}"},
-                    {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
-                ],
-                temperature=temp,
-                top_p=top_p
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            return f"Error generating response: {str(e)}"
+            temperature=temp,
+            top_p=top_p
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error generating response: {str(e)}"
 
 
 # -----------------------------------------------------------------------------
@@ -438,10 +436,10 @@ with st.sidebar:
             for model, details in AVAILABLE_MODELS_DICT.items():
                 st.write(f"**{model.split('/')[-1]}**: {details['price']}")
 
-        # Grok-3 Integration
-        use_grok = st.checkbox("Use Grok-3 Model", value=True)
-        if use_grok:
-            st.session_state.config["selected_models"].append("grok-3")
+        # # Grok-3 Integration
+        # use_grok = st.checkbox("Use Grok-3 Model", value=True)
+        # if use_grok:
+        #     st.session_state.config["selected_models"].append("grok-3")
                 
         st.session_state.config["vary_temperature"] = st.checkbox("Vary Temperature", value=True)
         st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
