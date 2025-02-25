@@ -4,7 +4,8 @@ import streamlit as st
 st.markdown(
     """
     <style>
-    [data-testid="stToolbar"] {
+    [data-testid="stToolbar"], 
+    [data-testid="appCreatorAvatar"] {
         display: none !important;
     }
     </style>
