@@ -1,18 +1,17 @@
 import streamlit as st
 # Add custom CSS to hide the GitHub icon
+
 st.markdown(
     """
-    <script>
-    setTimeout(function() {
-        let githubButton = document.querySelector('[data-testid="stToolbarActionButton"]');
-        if (githubButton) {
-            githubButton.style.display = "none";
-        }
-    }, 1000);
-    </script>
+    <style>
+    [data-testid="stToolbar"] {
+        display: none !important;
+    }
+    </style>
     """,
     unsafe_allow_html=True
 )
+
 
 
 
