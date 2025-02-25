@@ -3,16 +3,17 @@ import streamlit as st
 st.markdown(
     """
     <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    setTimeout(function() {
         let githubButton = document.querySelector('[data-testid="stToolbarActionButton"]');
         if (githubButton) {
             githubButton.style.display = "none";
         }
-    });
+    }, 1000);
     </script>
     """,
     unsafe_allow_html=True
 )
+
 
 
 import os
