@@ -2,8 +2,6 @@ import streamlit as st
 import os
 import requests
 from bs4 import BeautifulSoup
-from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
-from crawl4ai import AsyncWebCrawler
 import aiohttp
 import asyncio
 import PyPDF2
@@ -34,9 +32,9 @@ from google.api_core import exceptions
 
 # ================== Environment Variables ==================
 load_dotenv()
-API_KEY = os.getenv("TOGETHER_API_KEY")
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-MONGO_URI = os.getenv("MONGO_URI") or os.getenv("MongoDB")
+MONGO_URI = os.getenv("MongoDB")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GROK_API_KEY = os.getenv("GROK_API_KEY")
 
@@ -51,7 +49,14 @@ mongo_client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
 db = mongo_client["userembeddings"]
 collection = db["embeddings"]
 
-client = Together(api_key=API_KEY)
+client = Together(api_key=TOGETHER_API_KEY)
+
+try:
+    import playwright
+    subprocess.run(["playwright", "install"], check=True)
+except Exception as e:
+    print(f"Error installing Playwright: {e}")
+
 
 # Initialize FAISS and Embedding Model
 def initialize_vector_db():
@@ -102,26 +107,58 @@ def load_config(uploaded_file):
     except Exception as e:
         st.sidebar.error(f"Failed to load configuration: {e}")
 
-# ================== Helper Functions ==================
+
+# -----------------------------------------------------------------------------
+# PDF Processing Functions
+# -----------------------------------------------------------------------------
+def chunk_text(text, chunk_size=400, min_chunk_length=20):
+    paragraphs = re.split(r'\n{2,}', text)
+    chunks = []
+    for para in paragraphs:
+        sentences = re.split(r'(?<=[.!?])\s+', para)
+        temp_chunk = ""
+        for sentence in sentences:
+            if len(temp_chunk) + len(sentence) < chunk_size:
+                temp_chunk += sentence + " "
+            else:
+                cleaned_chunk = temp_chunk.strip()
+                if len(cleaned_chunk) >= min_chunk_length:
+                    chunks.append(cleaned_chunk)
+                temp_chunk = sentence + " "
+        cleaned_chunk = temp_chunk.strip()
+        if len(cleaned_chunk) >= min_chunk_length:
+            chunks.append(cleaned_chunk)
+    return chunks
 
 def extract_text(uploaded_file):
+    if uploaded_file is None:
+        return ""  # Handle case when no file is uploaded
+
     text = ""
     try:
-        file_bytes = io.BytesIO(uploaded_file.getvalue())
+        # Ensure uploaded_file is a file-like object
+        file_bytes = io.BytesIO(uploaded_file.read())  # Read and store in BytesIO
+
+        # Extract text using pdfplumber
         with pdfplumber.open(file_bytes) as pdf:
             text = ''.join([page.extract_text() or " " for page in pdf.pages])
+
     except Exception as e:
         st.error(f"An error occurred with pdfplumber: {e}")
+
+    # If pdfplumber fails, try PyPDF2
     if not text:
         try:
-            file_bytes.seek(0)
+            file_bytes.seek(0)  # Reset pointer before passing to PyPDF2
             reader = PyPDF2.PdfReader(file_bytes)
             text = ''.join([page.extract_text() or " " for page in reader.pages])
+
         except Exception as e:
             st.error(f"An error occurred with PyPDF2: {e}")
-    return text
 
+    return text
 # ================== Generate Response ==================
+
 def update_vector_db(texts, filename="uploaded"):
     if not texts:
         return
@@ -136,6 +173,9 @@ def process_pdf(file, filename="uploaded"):
     update_vector_db(chunks, filename)
     return chunks
 
+# -----------------------------------------------------------------------------
+# AI Generation Functions
+# -----------------------------------------------------------------------------
 def generate_response_gemini(prompt, context, temp, top_p):
     system_prompt = st.session_state.config["system_prompt"]
     input_parts = [system_prompt + "\n" + context, prompt]
@@ -206,8 +246,10 @@ def generate_response(prompt, context, model, temp, top_p):
         except Exception as e:
             return f"Error generating response: {str(e)}"
 
-# ================== Database Connection ==================
-# RAG Pipeline
+
+# -----------------------------------------------------------------------------
+# Retrieval Function (RAG)
+# -----------------------------------------------------------------------------
 def retrieve_context(query, top_k=15):
     query_embedding = embedding_model.encode([query]).tolist()[0]
     stored_docs = list(collection.find({}, {"_id": 0, "embedding": 1, "text": 1}))
@@ -228,76 +270,7 @@ def retrieve_context(query, top_k=15):
     return unique_texts
 
 
-def chunk_text(text, chunk_size=400, min_chunk_length=20):
-    paragraphs = re.split(r'\n{2,}', text)
-    chunks = []
-    for para in paragraphs:
-        sentences = re.split(r'(?<=[.!?])\s+', para)
-        temp_chunk = ""
-        for sentence in sentences:
-            if len(temp_chunk) + len(sentence) < chunk_size:
-                temp_chunk += sentence + " "
-            else:
-                cleaned_chunk = temp_chunk.strip()
-                if len(cleaned_chunk) >= min_chunk_length:
-                    chunks.append(cleaned_chunk)
-                temp_chunk = sentence + " "
-        cleaned_chunk = temp_chunk.strip()
-        if len(cleaned_chunk) >= min_chunk_length:
-            chunks.append(cleaned_chunk)
-    return chunks
-
 # ========= PDFs Link Extraction via URL =========
-try:
-    import playwright
-    subprocess.run(["playwright", "install"], check=True)
-except Exception as e:
-    print(f"Error installing Playwright: {e}")
-
-async def fetch_and_process_pdf_links(url):
-    """Scrapes a webpage, extracts text, finds PDFs, and summarizes content."""
-    # try:
-    browser_config = BrowserConfig(
-        browser_type="chromium",  # Use Chromium for compatibility
-        headless=True,  # Run in headless mode for Streamlit
-        use_managed_browser=False,  # Disable managed mode to prevent conflicts
-        debugging_port=None,  # No debugging port needed
-        proxy=None,  # Disable proxy unless explicitly required
-        text_mode=True,  # Optimize for text scraping (faster)
-        light_mode=True,  # Further performance optimizations
-        verbose=True,  # Enable logging for debugging
-        ignore_https_errors=True,  # Avoid SSL certificate issues
-        java_script_enabled=True  # Enable JS for dynamic content
-    )
-
-    run_config = CrawlerRunConfig(remove_overlay_elements=True)
-
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        result = await crawler.arun(url=url, config=run_config)
-
-        # Extract Text from Page
-        soup = BeautifulSoup(result.html, "html.parser")
-        paragraphs = "\n".join([p.get_text() for p in soup.find_all("p")])
-        summarized_text = summarize_text(paragraphs) if paragraphs else "No text available to summarize."
-
-        # Extract PDFs
-        internal_links = result.links.get("internal", [])
-        pdf_links = [link['href'] for link in internal_links if '.pdf' in link['href'].lower()]
-        
-        print("Number of found PDFs: ", len(pdf_links))
-
-        # Download PDFs
-        extracted_texts = []
-        if pdf_links:
-            async with aiohttp.ClientSession() as session:
-                for i, link in enumerate(pdf_links):
-                    pdf_path = f"document_{i}.pdf"
-                    saved_path = await download_pdf(link, session, pdf_path)
-                    if saved_path:
-                        extracted_texts.append(extract_text(saved_path))
-
-        return summarized_text, pdf_links, extracted_texts
-
 async def download_pdf(url, session, save_path):
     """Downloads a PDF file asynchronously."""
     try:
@@ -310,11 +283,6 @@ async def download_pdf(url, session, save_path):
         logging.error(f"Error downloading {url}: {e}")
     return None
 
-def process_pdf_links_from_url_sync(url: str):
-    # Replace asyncio.get_event_loop() with ProactorEventLoop as requested
-    loop = asyncio.ProactorEventLoop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(fetch_and_process_pdf_links(url))
 
 def get_page_items(url, base_url, listing_endpoint):
     """Extracts all item links from a page."""
@@ -371,13 +339,6 @@ def summarize_text(text):
     except Exception as e:
         logging.error(f"Error in summarization: {e}")
         return "Summarization failed."
-
-async def run_scraper(items):
-    for _, link in items:
-        print(link) 
-    tasks = [fetch_and_process_pdf_links(link) for _, link in items]
-    results = await asyncio.gather(*tasks)
-    return results
 
 # =================== Try another way ============================
 
@@ -562,7 +523,8 @@ with st.sidebar:
             else:
                 st.warning("No items found.")
 
-            store_in_DB(pdf_links)
+            if pdf_links:
+                asyncio.run(store_in_DB(pdf_links))
 
     with tab3:
         # Display Stored Files in MongoDB

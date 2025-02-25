@@ -358,10 +358,10 @@ if prompt := st.chat_input("Ask a question"):
                 for top_p in top_p_values:
                     with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
                         if model_type == "together":
-                            resp = generate_response_together(prompt, context, model, temp, top_p)
+                            response = generate_response_together(prompt, context, model, temp, top_p)
                         elif model_type == "gemini":
-                            resp = generate_response_gemini(prompt, context, temp, top_p)
-                        model_responses.append(f"Temp={temp}, Top-P={top_p}: {resp}")
+                            response = generate_response_gemini(prompt, context, temp, top_p)
+                        model_responses.append(f"Temp={temp}, Top-P={top_p}: {response}")
             response_text = "\n\n".join(model_responses)
             st.markdown(f"""
                 <div style="
