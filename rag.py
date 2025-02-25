@@ -1,4 +1,17 @@
 import streamlit as st
+# Add custom CSS to hide the GitHub icon
+st.markdown(
+    """
+    <style>
+    .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob,
+    .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137,
+    .viewerBadge_text__1JaDK {
+        display: none;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -618,11 +631,32 @@ with st.sidebar:
 
 # File Uploader for PDFs
 st.header("📤 Upload PDFs")
-pdf_files = st.file_uploader("Upload PDF documents", type=["pdf"], accept_multiple_files=True)
-if pdf_files:
-    for pdf_file in pdf_files:
-        chunks = process_pdf(pdf_file, pdf_file.name)
-        st.sidebar.success(f"Processed {pdf_file.name}, extracted {len(chunks)} text chunks.")
+# Initialize the file uploader with a unique key
+if "file_uploader_key" not in st.session_state:
+    st.session_state.file_uploader_key = 0
+
+uploaded_files = st.file_uploader(
+    "Upload PDFs", 
+    type="pdf", 
+    accept_multiple_files=True, 
+    key=f"file_uploader_{st.session_state.file_uploader_key}"
+)
+
+if uploaded_files:
+    for file in uploaded_files:
+        file_name = file.name
+        unique_file_hashes = set(item["file_hash"] for item in text_store)
+        file_hash = hashlib.md5(file.getvalue()).hexdigest()
+        if file_hash not in unique_file_hashes:
+            with io.BytesIO(file.getvalue()) as pdf_file:
+                process_pdf(pdf_file, file_name, file_hash)
+            # st.success(f"Processed '{file_name}'")
+        else:
+            st.info(f"File '{file_name}' has already been processed.")
+    
+    # Reset the file uploader by incrementing the key
+    st.session_state.file_uploader_key += 1
+    st.rerun()  # Force a rerun to update the UI immediately
 
 # Chat UI with Multiple Models
 st.header("💬 Chat with Documents")
@@ -632,6 +666,7 @@ if prompt := st.chat_input("Ask a question"):
     except Exception:
         lang = "en"
     context = retrieve_context(prompt)
+    print(context)
     # context = " ".join(retrieved_context) if retrieved_context else "No relevant context found."
     print(st.session_state.config["selected_models"] )
     tabs = st.tabs([model.split("/")[-1] for model in st.session_state.config["selected_models"]])
