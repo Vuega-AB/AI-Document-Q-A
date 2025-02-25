@@ -29,6 +29,7 @@ from urllib.parse import urljoin
 import pdfplumber
 import google.generativeai as genai
 from google.api_core import exceptions
+import openai
 
 # ================== Environment Variables ==================
 load_dotenv()
@@ -74,7 +75,8 @@ AVAILABLE_MODELS_DICT = {
     "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
     "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
-    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"}
+    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
+    "openai-4o": {"price": "Custom", "type": "openai"}
 }
 
 AVAILABLE_MODELS = list(AVAILABLE_MODELS_DICT.keys())
@@ -86,10 +88,10 @@ if "config" not in st.session_state:
     st.session_state.config = {
         "temperature": 0.7,
         "top_p": 0.9,
-        "system_prompt": "You are a helpful assistant. Answer questions based on the provided context.",
+        "system_prompt": "You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.'",
         "stored_pdfs": [],
         "text_chunks": [],
-        "selected_models": AVAILABLE_MODELS[:3],
+        "selected_models": AVAILABLE_MODELS[:1],
         "vary_temperature": True,
         "vary_top_p": False
     }
@@ -175,6 +177,25 @@ def generate_response_gemini(prompt, context, temp, top_p):
             return f"Error generating response: {str(e)}"
     st.error("API quota exceeded. Please try again later.")
     return "Error generating response."
+
+#openAi
+def generate_response_openAi(prompt, context, temp, top_p):
+    try:
+        # max_context_tokens = 6000
+        # truncated_context = context[:max_context_tokens]
+        
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "developer", "content": st.session_state.config["system_prompt"]},
+                {"role": "user", "content": f"Context: {context}\n\nQuestion: {prompt}"}
+            ],
+            temperature=temp,
+            top_p=top_p
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Error generating response: {str(e)}"
 
 # Together.AI Integration
 def generate_response(prompt, context, model, temp, top_p):
@@ -406,7 +427,7 @@ with st.sidebar:
 
     with tab1:
         st.header("Configuration")
-        st.session_state.config = {}
+        # st.session_state.config = {}
         st.session_state.config["selected_models"] = st.multiselect(
             "Select AI Models (Up to 3)", 
             AVAILABLE_MODELS,
@@ -426,7 +447,8 @@ with st.sidebar:
         st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
         st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, 0.5, 0.05)
         st.session_state.config["top_p"] = st.slider("Top-P", 0.0, 1.0, 0.9, 0.05)
-        st.session_state.config["system_prompt"] = st.text_area("System Prompt", value="You are an AI assistant.")
+        print(st.session_state.config["system_prompt"])
+        st.text_area("System Prompt", value=st.session_state.config("system_prompt"))
 
         config_file = st.file_uploader("Upload Configuration", type=['json'])
         if config_file:
@@ -537,6 +559,8 @@ if prompt := st.chat_input("Ask a question"):
                             response = generate_response(prompt, context, model, temp, top_p)
                         elif model_type == "gemini":
                             response = generate_response_gemini(prompt, context, temp, top_p)
+                        elif model_type == "openai":
+                            response = generate_response_openAi(prompt, context, temp, top_p)
                     # Enhanced UI with clear separation
                     st.markdown(f"""
                         <div style="

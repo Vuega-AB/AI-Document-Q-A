@@ -17,4 +17,5 @@ crawl4ai
 openai
 pymongo
 pymupdf
+PyCryptodome
 # !playwright install
