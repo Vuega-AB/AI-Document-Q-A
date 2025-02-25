@@ -2,19 +2,16 @@ import streamlit as st
 # Add custom CSS to hide the GitHub icon
 st.markdown(
     """
-    <style>
-    [data-testid="stDecoration"] {
-        display: none !important;
-    }
-    .css-1v0mbdj, .st-emotion-cache-1v0mbdj, 
-    .viewerBadge_container__1QSob, .styles_viewerBadge__1yB5_, 
-    .viewerBadge_link__1S137, .viewerBadge_text__1JaDK {
-        display: none !important;
-    }
-    </style>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let elements = document.querySelectorAll('[title="View source"]');
+        elements.forEach(el => el.style.display = "none");
+    });
+    </script>
     """,
     unsafe_allow_html=True
 )
+
 
 import os
 import requests
