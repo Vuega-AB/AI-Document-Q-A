@@ -70,6 +70,35 @@ except Exception as e:
     print(f"Error installing Playwright: {e}")
 
 
+# Available Together.AI models
+AVAILABLE_MODELS_DICT = {
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
+    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},
+    "databricks/dbrx-instruct": {"price": "$1.20", "type": "together"},
+    "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
+    "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
+    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
+    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
+    "openai-4o": {"price": "Custom", "type": "openai"}
+}
+
+AVAILABLE_MODELS = list(AVAILABLE_MODELS_DICT.keys())
+
+# Initialize session state
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "config" not in st.session_state:
+    st.session_state.config = {
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "system_prompt": "You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.'",
+        "stored_pdfs": [],
+        "text_chunks": [],
+        "selected_models": AVAILABLE_MODELS[:3],
+        "vary_temperature": True,
+        "vary_top_p": False
+    }
+
 # -----------------------------------------------------------------------------
 # dropbox Functions
 # -----------------------------------------------------------------------------
@@ -167,34 +196,6 @@ def initialize_and_load_data():
 
 embedding_model, faiss_index, text_store = initialize_and_load_data()
 
-# Available Together.AI models
-AVAILABLE_MODELS_DICT = {
-    "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
-    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},
-    "databricks/dbrx-instruct": {"price": "$1.20", "type": "together"},
-    "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
-    "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
-    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
-    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
-    "openai-4o": {"price": "Custom", "type": "openai"}
-}
-
-AVAILABLE_MODELS = list(AVAILABLE_MODELS_DICT.keys())
-
-# Initialize session state
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "config" not in st.session_state:
-    st.session_state.config = {
-        "temperature": 0.7,
-        "top_p": 0.9,
-        "system_prompt": "You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.'",
-        "stored_pdfs": [],
-        "text_chunks": [],
-        "selected_models": AVAILABLE_MODELS[:3],
-        "vary_temperature": True,
-        "vary_top_p": False
-    }
 
 # Function to save config as a downloadable JSON file
 def save_config(config):
@@ -561,7 +562,6 @@ with st.sidebar:
 
     with tab1:
         st.header("Configuration")
-        st.session_state.config = {}
         st.session_state.config["selected_models"] = st.multiselect(
             "Select AI Models (Up to 3)", 
             AVAILABLE_MODELS,
