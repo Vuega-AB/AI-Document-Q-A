@@ -4,8 +4,10 @@ st.markdown(
     """
     <script>
     document.addEventListener("DOMContentLoaded", function() {
-        let elements = document.querySelectorAll('[title="View source"]');
-        elements.forEach(el => el.style.display = "none");
+        let githubButton = document.querySelector('[data-testid="stToolbarActionButton"]');
+        if (githubButton) {
+            githubButton.style.display = "none";
+        }
     });
     </script>
     """,
