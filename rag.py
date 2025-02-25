@@ -3,15 +3,19 @@ import streamlit as st
 st.markdown(
     """
     <style>
-    .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob,
-    .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137,
-    .viewerBadge_text__1JaDK {
-        display: none;
+    [data-testid="stDecoration"] {
+        display: none !important;
+    }
+    .css-1v0mbdj, .st-emotion-cache-1v0mbdj, 
+    .viewerBadge_container__1QSob, .styles_viewerBadge__1yB5_, 
+    .viewerBadge_link__1S137, .viewerBadge_text__1JaDK {
+        display: none !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
+
 import os
 import requests
 from bs4 import BeautifulSoup
