@@ -5,7 +5,6 @@ from bs4 import BeautifulSoup
 import aiohttp
 import asyncio
 import PyPDF2
-import io
 import faiss
 import time
 import numpy as np
@@ -20,16 +19,15 @@ from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 import subprocess
 import logging
-from openai import OpenAI
 import sys
 import asyncio
 import httpx
-import aiofiles
 from urllib.parse import urljoin
-import pdfplumber
 import google.generativeai as genai
 from google.api_core import exceptions
 import openai
+import hashlib
+from hashlib import md5
 
 # ================== Environment Variables ==================
 load_dotenv()
@@ -89,24 +87,25 @@ if "config" not in st.session_state:
         "system_prompt": "You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.",
         "stored_pdfs": [],
         "text_chunks": [],
-        "selected_models": AVAILABLE_MODELS[:3],
-        "vary_temperature": True,
-        "vary_top_p": False
+        # "selected_models": AVAILABLE_MODELS[:3],
+        "vary_temperature": 1,
+        "vary_top_p": 0
     }
 
-# Function to save config as a downloadable JSON file
 def save_config(config):
+    """Save configuration as a JSON file."""
     json_bytes = json.dumps(config, indent=4).encode('utf-8')
     return BytesIO(json_bytes)
 
+# Function to load config from an uploaded JSON file
 def load_config(uploaded_file):
+    """Load configuration from a JSON file uploaded by the user."""
     try:
         config_data = json.load(uploaded_file)
-        st.session_state.config.update(config_data)
+        st.session_state.config.update(config_data)  # Update session state directly
         st.sidebar.success("Configuration loaded successfully!")
     except Exception as e:
         st.sidebar.error(f"Failed to load configuration: {e}")
-
 
 # -----------------------------------------------------------------------------
 # PDF Processing Functions
@@ -136,19 +135,26 @@ def extract_text(file):
     text = "".join([page.extract_text() + "\n" for page in reader.pages if page.extract_text()])
     return text
 # ================== Generate Response ==================
+# def compute_file_hash(file):
+#     """Computes MD5 hash of the file content."""
+#     hasher = md5()
+#     for chunk in iter(lambda: file.read(4096), b""):
+#         hasher.update(chunk)
+#     file.seek(0)  # Reset file pointer
+#     return hasher.hexdigest()
 
-def update_vector_db(texts, filename="uploaded"):
+def update_vector_db(texts, filehash, filename="uploaded"):
     if not texts:
         return
     embeddings = embedding_model.encode(texts).tolist()
-    documents = [{"filename": filename, "text": text, "embedding": emb} for text, emb in zip(texts, embeddings)]
+    documents = [{"filename": filename, "text": text, "filehash": filehash,"embedding": emb} for text, emb in zip(texts, embeddings)]
     collection.insert_many(documents)
     faiss_index.add(np.array(embeddings, dtype="float32"))
 
-def process_pdf(file, filename="uploaded"):
+def process_pdf(file, filehash=None, filename="uploaded"):
     text = extract_text(file)
     chunks = chunk_text(text)
-    update_vector_db(chunks, filename)
+    update_vector_db(chunks, filehash, filename)
     return chunks
 
 # -----------------------------------------------------------------------------
@@ -401,15 +407,19 @@ def delete_all_files():
 # -----------------------------------------------------------------------------
 async def store_in_DB(pdf_links):
     async with aiohttp.ClientSession() as session:
+        unique_file_hashes = set(item["filehash"] for item in collection.find({}, {"filehash": 1}))
         for pdf_link in pdf_links:
             try:
                 async with session.get(pdf_link) as response:
                     if response.status == 200:
                         pdf_bytes = await response.read()
-                        pdf_file = BytesIO(pdf_bytes)
-                        filename = os.path.basename(pdf_link)
-                        process_pdf(pdf_file, filename)
-                        st.success(f"Processed PDF: {filename}")
+                        filehash = hashlib.md5(pdf_bytes).hexdigest()
+                        if filehash not in unique_file_hashes:
+                            pdf_file = BytesIO(pdf_bytes)
+                            filename = os.path.basename(pdf_link)
+                            process_pdf(pdf_file, filehash, filename )
+                            st.success(f"Processed PDF: {filename}")
+                            unique_file_hashes.add(filehash)
                     else:
                         st.error(f"Failed to download PDF: {pdf_link}")
             except Exception as e:
@@ -418,7 +428,7 @@ async def store_in_DB(pdf_links):
 
 # =================== Streamlit UI ============================
 st.title("📄 AI Document Q&A and Web Scraper")
-
+selected_models =  AVAILABLE_MODELS[:3]
 # Sidebar with Tabs
 with st.sidebar:
     tab1, tab2, tab3 = st.tabs(["Configuration", "Web Scraper", "Database"])
@@ -426,7 +436,7 @@ with st.sidebar:
     with tab1:
         st.header("Configuration")
         st.session_state.config = {}
-        st.session_state.config["selected_models"] = st.multiselect(
+        selected_models = st.multiselect(
             "Select AI Models (Up to 3)", 
             AVAILABLE_MODELS,
             default=AVAILABLE_MODELS[:3],
@@ -441,20 +451,40 @@ with st.sidebar:
         # if use_grok:
         #     st.session_state.config["selected_models"].append("grok-3")
                 
-        st.session_state.config["vary_temperature"] = st.checkbox("Vary Temperature", value=True)
-        st.session_state.config["vary_top_p"] = st.checkbox("Vary Top-P", value=False)
-        st.session_state.config["temperature"] = st.slider("Temperature", 0.0, 1.0, 0.5, 0.05)
-        st.session_state.config["top_p"] = st.slider("Top-P", 0.0, 1.0, 0.9, 0.05)
-        st.session_state.config["system_prompt"] = st.text_area("System Prompt", value="You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.")
+       # UI Components - Use session state values
+        st.session_state.config["vary_temperature"] = st.checkbox(
+            "Vary Temperature", value=st.session_state.config.get("vary_temperature", True)
+        )
+        st.session_state.config["vary_top_p"] = st.checkbox(
+            "Vary Top-P", value=st.session_state.config.get("vary_top_p", False)
+        )
+        st.session_state.config["temperature"] = st.slider(
+            "Temperature", 0.0, 1.0, st.session_state.config.get("temperature", 0.7), 0.05
+        )
+        st.session_state.config["top_p"] = st.slider(
+            "Top-P", 0.0, 1.0, st.session_state.config.get("top_p", 0.9), 0.05
+        )
+        st.session_state.config["system_prompt"] = st.text_area(
+            "System Prompt", value=st.session_state.config.get(
+                "system_prompt", "You are a helpful assistant. Answer questions based on the provided context."
+            )
+        )
 
+        # Upload Config File
         config_file = st.file_uploader("Upload Configuration", type=['json'])
         if config_file:
             load_config(config_file)
 
+        # Function to save config as JSON
+        def save_config(config):
+            json_bytes = json.dumps(config, indent=4).encode('utf-8')
+            return BytesIO(json_bytes)
+
+        # Update & Download Config
         if st.button("Update and Download Configuration"):
             config_bytes = save_config(st.session_state.config)
             st.download_button("Download Config", data=config_bytes, file_name="config.json", mime="application/json")
-
+            
     with tab2:
         st.header("Web Scraper")
 
@@ -515,8 +545,15 @@ with st.sidebar:
 st.header("📤 Upload PDFs")
 pdf_files = st.file_uploader("Upload PDF documents", type=["pdf"], accept_multiple_files=True)
 if pdf_files:
+    unique_file_hashes = set(item["filehash"] for item in collection.find({}, {"filehash": 1}))
     for pdf_file in pdf_files:
-        chunks = process_pdf(pdf_file, pdf_file.name)
+        file_hash = hashlib.md5(pdf_file.getvalue()).hexdigest()
+        if file_hash in unique_file_hashes:
+            st.sidebar.warning(f"⚠️ {pdf_file.name} already exists. Skipping...")
+            continue  # Skip processing this file
+
+        chunks = process_pdf(pdf_file, file_hash, pdf_file.name)
+        unique_file_hashes.add(file_hash)
         st.sidebar.success(f"Processed {pdf_file.name}, extracted {len(chunks)} text chunks.")
 
 # Chat UI with Multiple Models
@@ -529,12 +566,12 @@ if prompt := st.chat_input("Ask a question"):
     retrieved_context = retrieve_context(prompt)
     context = " ".join(retrieved_context) if retrieved_context else "No relevant context found."
     
-    tabs = st.tabs([model.split("/")[-1] for model in st.session_state.config["selected_models"]])
+    tabs = st.tabs([model.split("/")[-1] for model in selected_models])
 
-    temp_values = [0, st.session_state.config["temperature"] / 3, st.session_state.config["temperature"]]
-    top_p_values = [0, st.session_state.config["top_p"] / 3, st.session_state.config["top_p"]]
+    temp_values = [0, st.session_state.config["temperature"] / 2, st.session_state.config["temperature"]]
+    top_p_values = [0, st.session_state.config["top_p"] / 2, st.session_state.config["top_p"]]
 
-    for tab, model in zip(tabs, st.session_state.config["selected_models"]):
+    for tab, model in zip(tabs, selected_models):
         with tab:
             st.markdown(f"""
                 <div style="
