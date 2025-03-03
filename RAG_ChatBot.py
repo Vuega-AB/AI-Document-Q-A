@@ -602,10 +602,11 @@ if prompt := st.chat_input("Ask a question"):
         with tab:
             st.markdown(f"""
                 <div style="
-                    border: 2px solid #2196F3;
+                    border: 2px solid {border_color};
                     padding: 10px;
                     border-radius: 10px;
-                    background-color: #e3f2fd;
+                    background-color: {user_background};
+                    color: {user_text_color};
                     margin-bottom: 10px;">
                     <strong>User:</strong> {prompt}
                 </div>
@@ -625,10 +626,11 @@ if prompt := st.chat_input("Ask a question"):
                     # Enhanced UI with clear separation
                     st.markdown(f"""
                         <div style="
-                            border: 2px solid #fc0303; 
+                            border: 2px solid {border_color}; 
                             padding: 15px; 
                             border-radius: 10px; 
-                            background-color: #f9f9f9;
+                            background-color: {background_color};
+                            color: {text_color};
                             margin-top: 10px;">
                             <strong style="color:#4CAF50;">Model:</strong> {model}<br>
                             <strong style="color:#FF9800;">Temperature:</strong> {temp}<br>
