@@ -1,6 +1,5 @@
 import streamlit as st
 # Add custom CSS to hide the GitHub icon
-
 st.markdown(
     """
     <style>
@@ -11,10 +10,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-
-
-
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -102,9 +97,7 @@ if "config" not in st.session_state:
         "temperature": 0.7,
         "top_p": 0.9,
         "system_prompt": "You are a helpful assistant. Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.'",
-        "stored_pdfs": [],
-        "text_chunks": [],
-        "selected_models": AVAILABLE_MODELS[:3],
+        "selected_models": AVAILABLE_MODELS[:1],
         "vary_temperature": True,
         "vary_top_p": False
     }
@@ -533,6 +526,17 @@ async def store_in_DB(pdf_links):
     st.success("Finished processing all PDF links.")
 
 # =================== Streamlit UI ============================
+
+# Detect dark mode based on Streamlit theme
+is_dark_mode = st.get_option("theme.base") == "dark"
+
+# Define styles for both themes
+background_color = "#1E1E1E" if is_dark_mode else "#f9f9f9"
+border_color = "#BB86FC" if is_dark_mode else "#fc0303"
+text_color = "#E0E0E0" if is_dark_mode else "#000000"
+user_background = "#333" if is_dark_mode else "#e3f2fd"
+user_text_color = "#FFF" if is_dark_mode else "#000"
+
 st.title("📄 AI Document Q&A and Web Scraper")
 
 # Sidebar with Tabs
@@ -544,7 +548,7 @@ with st.sidebar:
         st.session_state.config["selected_models"] = st.multiselect(
             "Select AI Models (Up to 3)", 
             AVAILABLE_MODELS,
-            default=AVAILABLE_MODELS[:1],
+            default=st.session_state.config["selected_models"],
         )
     
         with st.expander("Model Pricing"):
@@ -558,13 +562,16 @@ with st.sidebar:
         st.session_state.config["top_p"] = st.slider("Top-P", 0.0, 1.0, value=st.session_state.config.get("top_p", 0.5), step = 0.05)
         st.session_state.config["system_prompt"] = st.text_area("System Prompt", value=st.session_state.config.get("system_prompt", ""))
 
-        config_file = st.file_uploader("Upload Configuration", type=['json'])
+        if "config_uploader_key" not in st.session_state:
+            st.session_state.config_uploader_key = 0
+
+        config_file = st.file_uploader("Upload Configuration", type=['json'], key=f"config_uploader_{st.session_state.config_uploader_key}")
         if config_file:
             load_config(config_file)
+            st.session_state.config_uploader_key += 1
+            st.rerun()  # Force a rerun to update the UI immediately
 
-        if st.button("Update and Download Configuration"):
-            config_bytes = save_config(st.session_state.config)
-            st.download_button("Download Config", data=config_bytes, file_name="config.json", mime="application/json")
+        st.download_button("Download Config", data=save_config(st.session_state.config), file_name="config.json", mime="application/json")
 
     with tab2:
         st.header("Web Scraper")
@@ -674,18 +681,20 @@ if prompt := st.chat_input("Ask a question"):
     print(st.session_state.config["selected_models"] )
     tabs = st.tabs([model.split("/")[-1] for model in st.session_state.config["selected_models"]])
 
-    temp_values = [0, st.session_state.config["temperature"] / 3, st.session_state.config["temperature"]]
-    top_p_values = [0, st.session_state.config["top_p"] / 3, st.session_state.config["top_p"]]
+    temp_values = [0, st.session_state.config["temperature"] / 2, st.session_state.config["temperature"]]
+    top_p_values = [0, st.session_state.config["top_p"] / 2, st.session_state.config["top_p"]]
 
     for tab, model in zip(tabs, st.session_state.config["selected_models"]):
         with tab:
             model_type = AVAILABLE_MODELS_DICT[model]["type"]
+            # User Prompt Box
             st.markdown(f"""
                 <div style="
-                    border: 2px solid #2196F3;
+                    border: 2px solid {border_color};
                     padding: 10px;
                     border-radius: 10px;
-                    background-color: #e3f2fd;
+                    background-color: {user_background};
+                    color: {user_text_color};
                     margin-bottom: 10px;">
                     <strong>User:</strong> {prompt}
                 </div>
@@ -703,12 +712,14 @@ if prompt := st.chat_input("Ask a question"):
                         elif model_type == "openai":
                             response = generate_response_openAi(prompt, context, temp, top_p)
                     # Enhanced UI with clear separation
+                    print(response)
                     st.markdown(f"""
                         <div style="
-                            border: 2px solid #fc0303; 
+                            border: 2px solid {border_color}; 
                             padding: 15px; 
                             border-radius: 10px; 
-                            background-color: #f9f9f9;
+                            background-color: {background_color};
+                            color: {text_color};
                             margin-top: 10px;">
                             <strong style="color:#4CAF50;">Model:</strong> {model}<br>
                             <strong style="color:#FF9800;">Temperature:</strong> {temp}<br>
