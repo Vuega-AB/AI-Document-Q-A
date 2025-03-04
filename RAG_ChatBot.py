@@ -48,25 +48,15 @@ MONGO_URI = os.getenv("MongoDB")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # =================== Connections ============================
-# Configure Gemini (Google Generative AI)
 genai.configure(api_key=GOOGLE_API_KEY)
 gemini_model = genai.GenerativeModel("gemini-2.0-flash")
 
-# MongoDB Connection
 mongo_client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
 db = mongo_client["userembeddings"]
 collection = db["embeddings"]
 
 client = Together(api_key=TOGETHER_API_KEY)
 
-try:
-    import playwright
-    subprocess.run(["playwright", "install"], check=True)
-except Exception as e:
-    print(f"Error installing Playwright: {e}")
-
-
-# Initialize FAISS and Embedding Model
 def initialize_vector_db():
     model_local = SentenceTransformer("all-MiniLM-L6-v2")
     index = faiss.IndexFlatL2(384)
@@ -74,7 +64,6 @@ def initialize_vector_db():
 
 embedding_model, faiss_index = initialize_vector_db()
 
-# Available Together.AI models
 AVAILABLE_MODELS_DICT = {
     "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
     "openai-4o": {"price": "Custom", "type": "openai"},
@@ -88,7 +77,6 @@ AVAILABLE_MODELS_DICT = {
 
 AVAILABLE_MODELS = list(AVAILABLE_MODELS_DICT.keys())
 
-# Initialize session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "config" not in st.session_state:
@@ -106,12 +94,11 @@ def save_config(config):
     json_bytes = json.dumps(config, indent=4).encode('utf-8')
     return BytesIO(json_bytes)
 
-# Function to load config from an uploaded JSON file
 def load_config(uploaded_file):
     """Load configuration from a JSON file uploaded by the user."""
     try:
         config_data = json.load(uploaded_file)
-        st.session_state.config.update(config_data)  # Update session state directly
+        st.session_state.config.update(config_data)
         st.sidebar.success("Configuration loaded successfully!")
     except Exception as e:
         st.sidebar.error(f"Failed to load configuration: {e}")
@@ -144,13 +131,6 @@ def extract_text(file):
     text = "".join([page.extract_text() + "\n" for page in reader.pages if page.extract_text()])
     return text
 # ================== Generate Response ==================
-# def compute_file_hash(file):
-#     """Computes MD5 hash of the file content."""
-#     hasher = md5()
-#     for chunk in iter(lambda: file.read(4096), b""):
-#         hasher.update(chunk)
-#     file.seek(0)  # Reset file pointer
-#     return hasher.hexdigest()
 
 def update_vector_db(texts, filehash, filename="uploaded"):
     if not texts:
@@ -191,12 +171,8 @@ def generate_response_gemini(prompt, context, temp, top_p):
     st.error("API quota exceeded. Please try again later.")
     return "Error generating response."
 
-#openAi
 def generate_response_openAi(prompt, context, temp, top_p):
     try:
-        # max_context_tokens = 6000
-        # truncated_context = context[:max_context_tokens]
-        
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -210,40 +186,8 @@ def generate_response_openAi(prompt, context, temp, top_p):
     except Exception as e:
         return f"Error generating response: {str(e)}"
 
-# Together.AI Integration
 def generate_response(prompt, context, model, temp, top_p):
     system_prompt = st.session_state.config["system_prompt"]
-    # if model == "grok-3":
-    #     if not GROK_API_KEY:
-    #         raise ValueError("Missing xAI API Key. Set the GROK_API_KEY environment variable.")
-
-    #     # Define the API endpoint and headers
-    #     url = "https://api.x.ai/v1/chat/completions"
-    #     headers = {
-    #         "Authorization": f"Bearer {GROK_API_KEY}",
-    #         "Content-Type": "application/json"
-    #     }
-
-    #     # Construct the payload based on the xAI Grok API
-    #     payload = {
-    #         "model": model,
-    #         "messages": [
-    #             {"role": "system", "content": system_prompt},
-    #             {"role": "user", "content": f"Context: {context}. Question: {prompt}"}
-    #         ],
-    #         "temperature": temp,
-    #         "top_p": top_p,
-    #         "stream": False
-    #     }
-    #     try:
-    #         # Send the POST request to the xAI API
-    #         response = requests.post(url, headers=headers, json=payload)
-    #         response.raise_for_status()  # Raise an error for bad responses (4xx, 5xx)
-    #         return response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
-    #     except requests.exceptions.RequestException as e:
-    #         print(f"Error communicating with xAI API: {e}")
-    #         return ""
-    # else:
     try:
         response = client.chat.completions.create(
             model=model,
@@ -324,29 +268,12 @@ def get_all_items(base_url, listing_endpoint, pagination_format, num_pages):
 
     return list(all_items)
 
-
-# def summarize_text(text):
-#     """Summarizes extracted text using OpenAI."""
-#     try:
-#         client = OpenAI(api_key=OPENAI_API_KEY)
-#         response = client.chat.completions.create(
-#             model="gpt-4o-mini",
-#             messages=[
-#                 {"role": "system", "content": "Summarize the following text into a concise paragraph."},
-#                 {"role": "user", "content": text}
-#             ]
-#         )
-#         return response.choices[0].message.content
-#     except Exception as e:
-#         logging.error(f"Error in summarization: {e}")
-#         return "Summarization failed."
-
 # =================== Try another way ============================
 async def fetch_page(url):
     """Fetch page content asynchronously."""
     async with httpx.AsyncClient() as client:
         response = await client.get(url, timeout=None)
-        return response.text, str(response.url)  # Return HTML + Base URL
+        return response.text, str(response.url)
 
 
 async def download_with_retries(url, retries=3, delay=5):
@@ -354,12 +281,12 @@ async def download_with_retries(url, retries=3, delay=5):
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(url, timeout=60.0)
-                response.raise_for_status()  # Ensure the request was successful
+                response.raise_for_status()
                 return response.content
         except (httpx.ReadTimeout, httpx.RequestError) as e:
             print(f"Attempt {attempt + 1} failed: {e}")
             if attempt < retries - 1:
-                await asyncio.sleep(delay)  # Wait before retrying
+                await asyncio.sleep(delay)
     raise Exception(f"Failed to download {url} after {retries} attempts")
 
 async def extract_info(url):
@@ -367,33 +294,9 @@ async def extract_info(url):
     html, base_url = await fetch_page(url)
     soup = BeautifulSoup(html, "html.parser")
 
-    # # Extract paragraphs
-    # paragraphs = "\n".join(p.get_text() for p in soup.find_all("p"))
-    # print(f"Text from {url}:\n{paragraphs[:300]}...")
-
-    # Extract PDF links and convert relative to absolute URLs
     pdf_links = [urljoin(base_url, a["href"]) for a in soup.find_all("a", href=True) if ".pdf" in a["href"].lower()]
 
-    # # Download and extract PDF content
-    # pdf_texts = []
-    # for link in pdf_links:
-    #     pdf_texts.append(await download_and_extract_pdf(link))
-
     return pdf_links
-
-# async def download_and_extract_pdf(url):
-#     """Download a PDF and extract text."""
-#     async with httpx.AsyncClient() as client:
-#         response = await client.get(url)
-#         filename = url.split("/")[-1]
-
-#         # Save PDF file
-#         async with aiofiles.open(filename, "wb") as f:
-#             await f.write(response.content)
-#         print(f"Downloaded: {filename}")
-
-#         # Extract text from PDF
-#         return extract_text(filename)
 
 async def main(urls):
     """Scrape multiple pages concurrently."""
@@ -436,10 +339,8 @@ async def store_in_DB(pdf_links):
     st.success("Finished processing all PDF links.")
 
 # =================== Streamlit UI ============================
-# Detect dark mode based on Streamlit theme
 is_dark_mode = st.get_option("theme.base") == "dark"
 
-# Define styles for both themes
 background_color = "#1E1E1E" if is_dark_mode else "#f9f9f9"
 border_color = "#BB86FC" if is_dark_mode else "#fc0303"
 text_color = "#E0E0E0" if is_dark_mode else "#000000"
@@ -447,14 +348,12 @@ user_background = "#333" if is_dark_mode else "#e3f2fd"
 user_text_color = "#FFF" if is_dark_mode else "#000"
 
 st.title("📄 AI Document Q&A and Web Scraper")
-# selected_models =  AVAILABLE_MODELS[:3]
-# Sidebar with Tabs
+
 with st.sidebar:
     tab1, tab2, tab3 = st.tabs(["Configuration", "Web Scraper", "Database"])
 
     with tab1:
         st.header("Configuration")
-        # st.session_state.config = {}
         selected_models = st.multiselect(
             "Select AI Models (Up to 3)", 
             AVAILABLE_MODELS,
@@ -465,12 +364,6 @@ with st.sidebar:
             for model, details in AVAILABLE_MODELS_DICT.items():
                 st.write(f"**{model.split('/')[-1]}**: {details['price']}")
 
-        # # Grok-3 Integration
-        # use_grok = st.checkbox("Use Grok-3 Model", value=True)
-        # if use_grok:
-        #     st.session_state.config["selected_models"].append("grok-3")
-                
-       # UI Components - Use session state values
         st.session_state.config["vary_temperature"] = st.checkbox(
             "Vary Temperature", value=st.session_state.config.get("vary_temperature", True)
         )
@@ -489,7 +382,6 @@ with st.sidebar:
             )
         )
 
-
         if "config_uploader_key" not in st.session_state:
             st.session_state.config_uploader_key = 0
         
@@ -497,10 +389,8 @@ with st.sidebar:
         if config_file:
             load_config(config_file)
             st.session_state.config_uploader_key += 1
-            st.rerun()  # Force a rerun to update the UI immediately
+            st.rerun()
 
-        # if st.button("Update and Download Configuration"):
-        #     config_bytes = save_config(st.session_state.config)
         st.download_button("Download Config", data=save_config(st.session_state.config), file_name="config.json", mime="application/json")
 
             
@@ -527,11 +417,10 @@ with st.sidebar:
                 with st.spinner("Scraping in progress..."):
                     scrape_results = asyncio.run(main(urls))
 
-                pdf_links = set()  # Use a set to store unique links
+                pdf_links = set()
                 for i, extracted_data in enumerate(scrape_results):
                     pdf_links.update(extracted_data)
 
-                # Convert set back to list
                 pdf_links = list(pdf_links)
 
                 if pdf_links:
@@ -546,7 +435,6 @@ with st.sidebar:
                 asyncio.run(store_in_DB(pdf_links))
 
     with tab3:
-        # Display Stored Files in MongoDB
         st.subheader("📂 Stored Files in Database")
         stored_files = list(collection.distinct("filename"))
         if stored_files:
@@ -560,9 +448,7 @@ with st.sidebar:
         else:
             st.info("No files stored in the database.")
 
-# File Uploader for PDFs
 st.header("📤 Upload PDFs")
-# Initialize the file uploader with a unique key
 if "file_uploader_key" not in st.session_state:
     st.session_state.file_uploader_key = 0
 
@@ -573,17 +459,15 @@ if pdf_files:
         file_hash = hashlib.md5(pdf_file.getvalue()).hexdigest()
         if file_hash in unique_file_hashes:
             st.warning(f"⚠️ {pdf_file.name} already exists. Skipping...")
-            continue  # Skip processing this file
+            continue
 
         chunks = process_pdf(pdf_file, file_hash, pdf_file.name)
         unique_file_hashes.add(file_hash)
         st.success(f"Processed {pdf_file.name}, extracted {len(chunks)} text chunks.")
     
-    # Reset the file uploader by incrementing the key
     st.session_state.file_uploader_key += 1
-    st.rerun()  # Force a rerun to update the UI immediately
+    st.rerun()
 
-# Chat UI with Multiple Models
 st.header("💬 Chat with Documents")
 if prompt := st.chat_input("Ask a question"):
     try:
@@ -616,14 +500,12 @@ if prompt := st.chat_input("Ask a question"):
             for temp in temp_values if st.session_state.config["vary_temperature"] else [st.session_state.config["temperature"]]:
                 for top_p in top_p_values if st.session_state.config["vary_top_p"] else [st.session_state.config["top_p"]]:
                     with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
-                        response = generate_response(prompt, context, model, temp, top_p)
                         if model_type == "together":
                             response = generate_response(prompt, context, model, temp, top_p)
                         elif model_type == "gemini":
                             response = generate_response_gemini(prompt, context, temp, top_p)
                         elif model_type == "openai":
                             response = generate_response_openAi(prompt, context, temp, top_p)
-                    # Enhanced UI with clear separation
                     st.markdown(f"""
                         <div style="
                             border: 2px solid {border_color}; 
@@ -640,6 +522,4 @@ if prompt := st.chat_input("Ask a question"):
                         </div>
                     """, unsafe_allow_html=True)
 
-                    # Download Button
                     st.download_button(label="Download Response", data=response, file_name=f"response_{model}_temp{temp}_topP{top_p}.txt", mime="text/plain")
-
