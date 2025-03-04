@@ -360,17 +360,12 @@ with st.sidebar:
     tab1, tab2, tab3 = st.tabs(["Configuration", "Web Scraper", "Database"])
 
     with tab1:
-        st.header("Configuration")
-        prev_models = st.session_state.config["selected_models"].copy()
-        
+        st.header("Configuration")        
         selected_models = st.multiselect(
             "Select AI Models (Up to 3)", 
             AVAILABLE_MODELS,
             default=st.session_state.config["selected_models"],
         )
-
-        # if selected_models != prev_models:
-        #     st.session_state.chat_history = []
     
         with st.expander("Model Pricing"):
             for model, details in AVAILABLE_MODELS_DICT.items():
@@ -480,61 +475,26 @@ if pdf_files:
     st.session_state.file_uploader_key += 1
     st.rerun()
 
+st.header("💬 Chat with Documents")
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-st.header("💬 Chat with Documents")
+# 🔹 **Step 1: Show Chat History Without Triggering Response Generation**
+tabs = st.tabs([model.split("/")[-1] for model in selected_models])
 
-if prompt := st.chat_input("Ask a question"):
-    try:
-        lang = detect(prompt)
-    except Exception:
-        lang = "en"
-    
-    retrieved_context = retrieve_context(prompt)
-    context = " ".join(retrieved_context) if retrieved_context else "No relevant context found."
+for tab, model in zip(tabs, selected_models):
+    with tab:
+        model_type = AVAILABLE_MODELS_DICT[model]["type"]
 
-    tabs = st.tabs([model.split("/")[-1] for model in selected_models])
+        # Display stored chat history for this model
+        for message in st.session_state.chat_history:
+            # Show user messages for all models, but model responses only in their respective tab
+            if message["role"] == "user" or message["model_name"] == model:
+                role = "User" if message["role"] == "user" else "Model"
+                message_color = user_background if message["role"] == "user" else background_color
+                text_color = user_text_color if message["role"] == "user" else text_color
 
-    temp_values = [0, st.session_state.config["temperature"] / 2, st.session_state.config["temperature"]]
-    top_p_values = [0, st.session_state.config["top_p"] / 2, st.session_state.config["top_p"]]
-
-    for tab, model in zip(tabs, selected_models):
-        st.session_state.chat_history.append({"role": "user", "text": prompt, "model_name": model})
-        with tab:
-            model_type = AVAILABLE_MODELS_DICT[model]["type"]
-            # Display chat history filtered by model
-            for message in st.session_state.chat_history:
-                if message["model_name"] == model:
-                    role = "User" if message["role"] == "user" else "Model"
-                    message_color = user_background if message["role"] == "user" else background_color
-                    text_color = user_text_color if message["role"] == "user" else text_color
-
-                    st.markdown(f"""
-                        <div style="
-                            border: 2px solid {border_color};
-                            padding: 10px;
-                            border-radius: 10px;
-                            background-color: {message_color};
-                            color: {text_color};
-                            margin-bottom: 10px;">
-                            <strong>{role}:</strong> {message["text"]}
-                        </div>
-                    """, unsafe_allow_html=True)
-            # Generate Response
-            for temp in temp_values if st.session_state.config["vary_temperature"] else [st.session_state.config["temperature"]]:
-                for top_p in top_p_values if st.session_state.config["vary_top_p"] else [st.session_state.config["top_p"]]:
-                    with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
-                        if model_type == "together":
-                            response = generate_response(prompt, context, model, temp, top_p)
-                        elif model_type == "gemini":
-                            response = generate_response_gemini(prompt, context, temp, top_p)
-                        elif model_type == "openai":
-                            response = generate_response_openAi(prompt, context, temp, top_p)
-
-                    # Store model response in chat history with its model name
-                    st.session_state.chat_history.append({"role": "model", "text": response, "model_name": model})
-
+                if role == "Model":
                     st.markdown(f"""
                         <div style="
                             border: 2px solid {border_color}; 
@@ -544,11 +504,59 @@ if prompt := st.chat_input("Ask a question"):
                             color: {text_color};
                             margin-top: 10px;">
                             <strong style="color:#4CAF50;">Model:</strong> {model}<br>
-                            <strong style="color:#FF9800;">Temperature:</strong> {temp}<br>
-                            <strong style="color:#2196F3;">Top-P:</strong> {top_p}<br>
+                            <strong style="color:#FF9800;">Temperature:</strong> {message["temp"]}<br>
+                            <strong style="color:#2196F3;">Top-P:</strong> {message["top_p"]}<br>
                             <hr>
-                            <strong>Response:</strong> {response}
+                            <strong>Response:</strong> {message["text"]}
+                        </div>
+                    """, unsafe_allow_html=True)
+                elif role == "User":
+                    st.markdown(f"""
+                        <div style="
+                            border: 2px solid {border_color};
+                            padding: 15px;
+                            border-radius: 10px;
+                            background-color: {message_color};
+                            color: {text_color};
+                            margin-bottom: 10px;">
+                            <strong>{role}:</strong> {message["text"]}
                         </div>
                     """, unsafe_allow_html=True)
 
-                    # st.download_button(label="Download Response", data=response, file_name=f"response_{model}_temp{temp}_topP{top_p}.txt", mime="text/plain")
+
+# 🔹 **Step 2: Generate Response Only When New Input is Entered**
+if prompt := st.chat_input("Ask a question"):
+    try:
+        lang = detect(prompt)
+    except Exception:
+        lang = "en"
+    
+    retrieve_context = ""
+    with st.spinner("Processing your Query..."):
+        retrieved_context = retrieve_context(prompt)
+    context = " ".join(retrieved_context) if retrieved_context else "No relevant context found."
+
+    # Store user input only once (not per model)
+    st.session_state.chat_history.append({"role": "user", "text": prompt, "model_name": None})
+
+    # Iterate through selected models and generate responses
+    temp_values = [0, st.session_state.config["temperature"] / 2, st.session_state.config["temperature"]]
+    top_p_values = [0, st.session_state.config["top_p"] / 2, st.session_state.config["top_p"]]
+
+    for model in selected_models:
+        model_type = AVAILABLE_MODELS_DICT[model]["type"]
+
+        for temp in temp_values if st.session_state.config["vary_temperature"] else [st.session_state.config["temperature"]]:
+            for top_p in top_p_values if st.session_state.config["vary_top_p"] else [st.session_state.config["top_p"]]:
+                with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
+                    if model_type == "together":
+                        response = generate_response(prompt, context, model, temp, top_p)
+                    elif model_type == "gemini":
+                        response = generate_response_gemini(prompt, context, temp, top_p)
+                    elif model_type == "openai":
+                        response = generate_response_openAi(prompt, context, temp, top_p)
+
+                # Store model response in chat history with its model name
+                st.session_state.chat_history.append({"role": "model", "text": response, "model_name": model, "temp": temp, "top_p": top_p})
+
+    st.rerun()  # Force UI update to display new responses
