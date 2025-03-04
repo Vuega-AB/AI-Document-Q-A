@@ -58,8 +58,8 @@ collection = db["embeddings"]
 client = Together(api_key=TOGETHER_API_KEY)
 
 def initialize_vector_db():
-    model_local = SentenceTransformer("all-MiniLM-L6-v2")
-    index = faiss.IndexFlatL2(384)
+    model_local = SentenceTransformer("multi-qa-mpnet-base-dot-v1")
+    index = faiss.IndexFlatL2(768)
     return model_local, index
 
 embedding_model, faiss_index = initialize_vector_db()
@@ -136,8 +136,15 @@ def update_vector_db(texts, filehash, filename="uploaded"):
     if not texts:
         return
     embeddings = embedding_model.encode(texts).tolist()
-    documents = [{"filename": filename, "text": text, "filehash": filehash,"embedding": emb} for text, emb in zip(texts, embeddings)]
-    collection.insert_many(documents)
+    embedding_array = np.array(embeddings, dtype="float32")
+    print(f"Embedding shape: {embedding_array.shape}")
+    documents = [{"filename": filename, "text": text, "filehash": filehash, "embedding": emb} for text, emb in zip(texts, embeddings)]
+    
+    try:
+        collection.insert_many(documents, ordered=False)
+    except Exception as e:
+        print(f"Error inserting documents: {e}")
+
     faiss_index.add(np.array(embeddings, dtype="float32"))
 
 def process_pdf(file, filehash=None, filename="uploaded"):
@@ -324,14 +331,15 @@ async def store_in_DB(pdf_links):
             try:
                 async with session.get(pdf_link) as response:
                     if response.status == 200:
-                        pdf_bytes = await response.read()
-                        filehash = hashlib.md5(pdf_bytes).hexdigest()
-                        if filehash not in unique_file_hashes:
-                            pdf_file = BytesIO(pdf_bytes)
-                            filename = os.path.basename(pdf_link)
-                            process_pdf(pdf_file, filehash, filename )
-                            st.success(f"Processed PDF: {filename}")
-                            unique_file_hashes.add(filehash)
+                        with st.spinner(f"Processing PDF: {pdf_link}"):
+                            pdf_bytes = await response.read()
+                            filehash = hashlib.md5(pdf_bytes).hexdigest()
+                            if filehash not in unique_file_hashes:
+                                pdf_file = BytesIO(pdf_bytes)
+                                filename = os.path.basename(pdf_link)
+                                process_pdf(pdf_file, filehash, filename )
+                                st.success(f"Processed PDF: {filename}")
+                                unique_file_hashes.add(filehash)
                     else:
                         st.error(f"Failed to download PDF: {pdf_link}")
             except Exception as e:
