@@ -531,7 +531,7 @@ if prompt := st.chat_input("Ask a question"):
     except Exception:
         lang = "en"
     
-    retrieve_context = ""
+    retrieved_context = []
     with st.spinner("Processing your Query..."):
         retrieved_context = retrieve_context(prompt)
     context = " ".join(retrieved_context) if retrieved_context else "No relevant context found."
