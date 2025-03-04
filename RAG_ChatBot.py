@@ -443,6 +443,26 @@ with st.sidebar:
 
     with tab3:
         st.subheader("📂 Stored Files in Database")
+        st.header("📤 Upload PDFs")
+        if "file_uploader_key" not in st.session_state:
+            st.session_state.file_uploader_key = 0
+
+        pdf_files = st.file_uploader("Upload PDF documents", type=["pdf"], accept_multiple_files=True, key=f"file_uploader_{st.session_state.file_uploader_key}")
+        if pdf_files:
+            unique_file_hashes = set(item["filehash"] for item in collection.find({}, {"filehash": 1}))
+            for pdf_file in pdf_files:
+                file_hash = hashlib.md5(pdf_file.getvalue()).hexdigest()
+                if file_hash in unique_file_hashes:
+                    st.warning(f"⚠️ {pdf_file.name} already exists. Skipping...")
+                    continue
+
+                chunks = process_pdf(pdf_file, file_hash, pdf_file.name)
+                unique_file_hashes.add(file_hash)
+                st.success(f"Processed {pdf_file.name}, extracted {len(chunks)} text chunks.")
+            
+            st.session_state.file_uploader_key += 1
+            st.rerun()
+            
         stored_files = list(collection.distinct("filename"))
         if stored_files:
             for filename in stored_files:
@@ -454,26 +474,6 @@ with st.sidebar:
                 delete_all_files()
         else:
             st.info("No files stored in the database.")
-
-st.header("📤 Upload PDFs")
-if "file_uploader_key" not in st.session_state:
-    st.session_state.file_uploader_key = 0
-
-pdf_files = st.file_uploader("Upload PDF documents", type=["pdf"], accept_multiple_files=True, key=f"file_uploader_{st.session_state.file_uploader_key}")
-if pdf_files:
-    unique_file_hashes = set(item["filehash"] for item in collection.find({}, {"filehash": 1}))
-    for pdf_file in pdf_files:
-        file_hash = hashlib.md5(pdf_file.getvalue()).hexdigest()
-        if file_hash in unique_file_hashes:
-            st.warning(f"⚠️ {pdf_file.name} already exists. Skipping...")
-            continue
-
-        chunks = process_pdf(pdf_file, file_hash, pdf_file.name)
-        unique_file_hashes.add(file_hash)
-        st.success(f"Processed {pdf_file.name}, extracted {len(chunks)} text chunks.")
-    
-    st.session_state.file_uploader_key += 1
-    st.rerun()
 
 st.header("💬 Chat with Documents")
 if "chat_history" not in st.session_state:
@@ -489,7 +489,7 @@ for tab, model in zip(tabs, selected_models):
         # Display stored chat history for this model
         for message in st.session_state.chat_history:
             # Show user messages for all models, but model responses only in their respective tab
-            if message["role"] == "user" or message["model_name"] == model:
+            if message["model_name"] == model:
                 role = "User" if message["role"] == "user" else "Model"
                 message_color = user_background if message["role"] == "user" else background_color
                 text_color = user_text_color if message["role"] == "user" else text_color
@@ -537,7 +537,7 @@ if prompt := st.chat_input("Ask a question"):
     context = " ".join(retrieved_context) if retrieved_context else "No relevant context found."
 
     # Store user input only once (not per model)
-    st.session_state.chat_history.append({"role": "user", "text": prompt, "model_name": None})
+    
 
     # Iterate through selected models and generate responses
     temp_values = [0, st.session_state.config["temperature"] / 2, st.session_state.config["temperature"]]
@@ -545,7 +545,7 @@ if prompt := st.chat_input("Ask a question"):
 
     for model in selected_models:
         model_type = AVAILABLE_MODELS_DICT[model]["type"]
-
+        st.session_state.chat_history.append({"role": "user", "text": prompt, "model_name": model})
         for temp in temp_values if st.session_state.config["vary_temperature"] else [st.session_state.config["temperature"]]:
             for top_p in top_p_values if st.session_state.config["vary_top_p"] else [st.session_state.config["top_p"]]:
                 with st.spinner(f"Generating response from {model} (Temp={temp}, Top-P={top_p})..."):
