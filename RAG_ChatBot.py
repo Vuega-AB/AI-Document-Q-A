@@ -69,7 +69,6 @@ AVAILABLE_MODELS_DICT = {
     "openai-4o": {"price": "Custom", "type": "openai"},
     "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
     "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},
-    "databricks/dbrx-instruct": {"price": "$1.20", "type": "together"},
     "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
     "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
