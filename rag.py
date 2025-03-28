@@ -232,12 +232,20 @@ def save_user_data(data):
     dbx.files_upload(json.dumps(data).encode(), USER_DATA_FILE, mode=dropbox.files.WriteMode("overwrite"))
 
 def list_user_files(username):
-    user_folder = f"/{username}/"  # Each user gets a dedicated folder
     try:
-        files = dbx.files_list_folder(user_folder).entries
-        return [{"file_name": f.name, "file_path": f.path_lower} for f in files]
-    except dropbox.exceptions.ApiError:
-        return []  # No files or folder doesn't exist
+        metadata, response = dbx.files_download(TEXT_FILE_DROPBOX)
+        file_data = json.loads(response.content.decode("utf-8"))
+
+        # Filter files by username
+        user_files = [file for file in file_data if file["username"] == username]
+
+        st.write(f"🔍 Found {len(user_files)} files for user: {username}")
+        return user_files
+
+    except dropbox.exceptions.ApiError as e:
+        st.write(f"❌ Error retrieving files: {e}")
+        return []
+
     
 def delete_file_from_dropbox(file_path):
     try:
@@ -357,22 +365,12 @@ def update_vector_db(username, texts, file_name, file_hash):
 
     faiss.write_index(faiss_index, INDEX_FILE)
 
-import streamlit as st
-
 def process_pdf(username, file, file_name, file_hash):
     text = extract_text_from_pdf(file)
-    st.write(f"**Extracted Text (First 500 chars):**\n{text[:500]}")  # Show the first 500 characters
-
     chunks = chunk_text(text)
-    st.write(f"**Chunks (First 5):**\n{chunks[:5]}")  # Show the first 5 chunks
-
     update_vector_db(username, chunks, file_name, file_hash)
-    st.write(f"✅ **Vector DB Updated:** {len(text_store)} entries")
-
     save_data_to_dropbox()
     return chunks
-
-
 
 # -----------------------------------------------------------------------------
 # AI Generation Functions
