@@ -357,18 +357,21 @@ def update_vector_db(username, texts, file_name, file_hash):
 
     faiss.write_index(faiss_index, INDEX_FILE)
 
+import streamlit as st
+
 def process_pdf(username, file, file_name, file_hash):
     text = extract_text_from_pdf(file)
-    print(f"Extracted text: {text[:500]}")  # Print first 500 chars for debugging
+    st.write(f"**Extracted Text (First 500 chars):**\n{text[:500]}")  # Show the first 500 characters
 
     chunks = chunk_text(text)
-    print(f"Chunks: {chunks[:5]}")  # Print first 5 chunks to see if chunking works
+    st.write(f"**Chunks (First 5):**\n{chunks[:5]}")  # Show the first 5 chunks
 
     update_vector_db(username, chunks, file_name, file_hash)
-    print(f"Updated vector DB: {len(text_store)} entries")
+    st.write(f"✅ **Vector DB Updated:** {len(text_store)} entries")
 
     save_data_to_dropbox()
     return chunks
+
 
 
 # -----------------------------------------------------------------------------
