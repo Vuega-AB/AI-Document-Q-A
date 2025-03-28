@@ -359,10 +359,17 @@ def update_vector_db(username, texts, file_name, file_hash):
 
 def process_pdf(username, file, file_name, file_hash):
     text = extract_text_from_pdf(file)
+    print(f"Extracted text: {text[:500]}")  # Print first 500 chars for debugging
+
     chunks = chunk_text(text)
+    print(f"Chunks: {chunks[:5]}")  # Print first 5 chunks to see if chunking works
+
     update_vector_db(username, chunks, file_name, file_hash)
+    print(f"Updated vector DB: {len(text_store)} entries")
+
     save_data_to_dropbox()
     return chunks
+
 
 # -----------------------------------------------------------------------------
 # AI Generation Functions
