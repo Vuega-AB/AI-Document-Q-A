@@ -218,48 +218,39 @@ def load_config(uploaded_file):
     except Exception as e:
         st.sidebar.error(f"Failed to load configuration: {e}")
 
+# =================== Email OTP Function =========================
+USER_DATA_FILE = "/user_data.json"
 
-
-USER_DATA_FILE = "/user_data.json"  # File path in Dropbox
-
-# Function to load user data from Dropbox
 def load_user_data():
+    """Load user data from Dropbox."""
     try:
-        _, res = dbx.files_download(USER_DATA_FILE)
-        return json.loads(res.content)
-    except dropbox.exceptions.ApiError:
-        return {}  # Return empty dict if file doesn't exist
+        metadata, res = dbx.files_download(path=USER_DATA_FILE)
+        return json.loads(res.content.decode('utf-8'))
+    except Exception:
+        return {}
 
-# Function to save user data to Dropbox
-def save_user_data(data):
-    dbx.files_upload(json.dumps(data).encode(), USER_DATA_FILE, mode=dropbox.files.WriteMode("overwrite"))
+def save_user_data(user_data):
+    """Save user data to Dropbox."""
+    try:
+        data_json = json.dumps(user_data, indent=4).encode('utf-8')
+        dbx.files_upload(data_json, USER_DATA_FILE, mode=dropbox.files.WriteMode.overwrite)
+    except Exception as e:
+        st.error(f"Error saving user data: {e}")
 
-def list_user_files(username):
-    user_folder = f"/{username}/"  # Each user gets a dedicated folder
-    try:
-        files = dbx.files_list_folder(user_folder).entries
-        return [{"file_name": f.name, "file_path": f.path_lower} for f in files]
-    except dropbox.exceptions.ApiError:
-        return []  # No files or folder doesn't exist
-    
-def delete_file_from_dropbox(file_path):
-    try:
-        dbx.files_delete_v2(file_path)
-        st.success("File deleted successfully!")
-    except dropbox.exceptions.ApiError as e:
-        st.error(f"Error deleting file: {e}")
+user_data = load_user_data()
 
 # =================== Email OTP Function =========================
 EMAIL_SENDER = "nancyhisham2003@gmail.com"
-EMAIL_PASSWORD = "sike xztt teak orkr"
+EMAIL_PASSWORD = "sike xztt teak orkr"  # Consider using environment variables for security
 
 def send_otp(email, otp):
+    """Send an OTP to the user's email."""
     msg = EmailMessage()
     msg.set_content(f"Your OTP for login is: {otp}")
     msg["Subject"] = "Your Login OTP"
     msg["From"] = EMAIL_SENDER
     msg["To"] = email
-
+    
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(EMAIL_SENDER, EMAIL_PASSWORD)
@@ -272,16 +263,17 @@ def send_otp(email, otp):
 # =================== Authentication UI =========================
 # Initialize session state variables
 if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+    st.session_state["logged_in"] = False
 if "username" not in st.session_state:
-    st.session_state.username = None
+    st.session_state["username"] = None
+if "otp" not in st.session_state:
+    st.session_state["otp"] = None
+if "email" not in st.session_state:
+    st.session_state["email"] = None
 
-# Load user data
-user_data = load_user_data()
+st.title("Secure User Authentication")
 
-if not st.session_state.logged_in:
-    st.title("Secure User Authentication")
-    
+if not st.session_state["logged_in"]:
     user_email = st.text_input("Enter your email:")
     
     if st.button("Send OTP"):
@@ -291,23 +283,34 @@ if not st.session_state.logged_in:
                 st.session_state["otp"] = otp
                 st.session_state["email"] = user_email
                 st.success("OTP sent! Check your email.")
-
-    if "otp" in st.session_state:
+            else:
+                st.error("Failed to send OTP. Try again.")
+    
+    if st.session_state["otp"]:
         otp_input = st.text_input("Enter OTP:", type="password")
-
+        
         if st.button("Login"):
-            if otp_input and int(otp_input) == st.session_state["otp"]:
-                st.session_state.username = st.session_state["email"].split("@")[0]
+            if otp_input and otp_input.isdigit() and int(otp_input) == st.session_state["otp"]:
+                st.session_state["username"] = st.session_state["email"].split("@")[0]
+                st.session_state["logged_in"] = True
                 
-                # Save user to Dropbox if new
-                if user_email not in user_data:
-                    user_data[user_email] = {"email": user_email, "data": []}
+                # Save user if new in Dropbox
+                if st.session_state["email"] not in user_data:
+                    user_data[st.session_state["email"]] = {"email": st.session_state["email"], "data": []}
                     save_user_data(user_data)
                 
-                st.success(f"Welcome, {st.session_state.username}!")
-                st.session_state.logged_in = True
-                st.rerun()
-
+                st.success(f"Welcome, {st.session_state["username"]}!")
+                st.experimental_rerun()
+            else:
+                st.error("Invalid OTP. Try again.")
+else:
+    st.success(f"Logged in as {st.session_state["username"]}")
+    if st.button("Logout"):
+        st.session_state["logged_in"] = False
+        st.session_state["username"] = None
+        st.session_state["otp"] = None
+        st.session_state["email"] = None
+        st.experimental_rerun()
 
 # -----------------------------------------------------------------------------
 # PDF Processing Functions
@@ -364,7 +367,7 @@ def process_pdf(username, file, file_name, file_hash):
     text = extract_text_from_pdf(file)
     chunks = chunk_text(text)
     update_vector_db(username, chunks, file_name, file_hash)
-    save_data_to_dropbox(username)  # Pass the username to save in the correct folder
+    save_data_to_dropbox(username, file_name, file.getvalue())  # Save file in user account
     return chunks
 
 
@@ -567,24 +570,37 @@ async def main(urls):
 # -----------------------------------------------------------------------------
 # File Deletion Functions
 # -----------------------------------------------------------------------------
-
+def delete_from_dropbox(username, file_hash):
+    """Deletes a file from the user's Dropbox account based on the file hash."""
+    user_folder = f"/{username}/"
+    
+    try:
+        # List files to find the matching hash
+        files = dbx.files_list_folder(user_folder).entries
+        for file in files:
+            if file.name.startswith(file_hash):
+                file_path = f"{user_folder}{file.name}"
+                dbx.files_delete_v2(file_path)
+                print(f"Deleted {file_path} from Dropbox")
+                return True
+        print("File not found in Dropbox.")
+        return False
+    except dropbox.exceptions.ApiError as e:
+        print(f"Error deleting file from Dropbox: {e}")
+        return False
+    
 def delete_pdf(username, file_hash):
     global text_store, faiss_index
-
     try:
         indices_to_remove = [
             i for i, item in enumerate(text_store)
-            if item["file_hash"] == file_hash and item["username"] == username  # Check username
+            if item["file_hash"] == file_hash and item["username"] == username
         ]
-
         if not indices_to_remove:
             st.warning("You do not have permission to delete this file.")
             return
-
-        # Remove items from text_store
         for index in sorted(indices_to_remove, reverse=True):
             del text_store[index]
-
         texts = [item["text"] for item in text_store]
         if texts:
             embeddings = embedding_model.encode(texts)
@@ -593,12 +609,12 @@ def delete_pdf(username, file_hash):
             faiss_index.add(embeddings)
         else:
             faiss_index = faiss.IndexFlatL2(384)
-
         faiss.write_index(faiss_index, INDEX_FILE)
-
-        save_data_to_dropbox()
+        delete_from_dropbox(username, file_hash)
         st.sidebar.success(f"PDF file deleted successfully!")
-        st.rerun()  # Force a rerun to update the UI immediately
+        st.rerun()
+    except Exception as e:
+        st.error(f"Error deleting PDF: {e}")
 
     except Exception as e:
         st.error(f"Error deleting PDF: {e}")
@@ -606,6 +622,25 @@ def delete_pdf(username, file_hash):
 # -----------------------------------------------------------------------------
 # save
 # -----------------------------------------------------------------------------
+def list_user_files(username):
+    """Lists all files in the user's Dropbox folder."""
+    user_folder = f"/{username}/"
+    files_list = []
+    
+    try:
+        response = dbx.files_list_folder(user_folder)
+        for entry in response.entries:
+            if isinstance(entry, dropbox.files.FileMetadata):
+                files_list.append({
+                    "file_name": entry.name,
+                    "file_path": entry.path_lower,
+                    "file_hash": entry.name.split(".")[0]  # Extracting hash from filename
+                })
+        return files_list
+    except dropbox.exceptions.ApiError as e:
+        print(f"Error listing files for {username}: {e}")
+        return []
+
 async def store_in_DB(pdf_links, username):
     async with aiohttp.ClientSession() as session:
         unique_file_hashes = set(item["file_hash"] for item in text_store)
@@ -729,24 +764,21 @@ with st.sidebar:
                 st.warning("No items found.")
 
             if pdf_links:
-                asyncio.run(store_in_DB(pdf_links))
+                asyncio.run(store_in_DB(pdf_links, username))
 
             # print(db.list_collection_names())
 
 with tab3:
     st.subheader("📂 Stored Files in Your Dropbox Account")
-    user_files = list_user_files(st.session_state.username)
-
+    user_files = list_user_files(username)
     if user_files:
         for file in user_files:
             col1, col2 = st.columns([3, 1])
-            
             with col1:
                 st.write(file["file_name"])
-            
             with col2:
                 if st.button("🗑️", key=f"delete_{file['file_path']}"):
-                    delete_file_from_dropbox(file["file_path"])
+                    delete_pdf(username, file["file_hash"])
                     st.rerun()
     else:
         st.write("No documents uploaded yet.")
