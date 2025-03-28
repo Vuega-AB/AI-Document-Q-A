@@ -279,32 +279,29 @@ def send_otp(email, otp):
 # Initialize session state variables if they don't exist
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if "otp_sent" not in st.session_state:
-    st.session_state.otp_sent = False
-if "otp" not in st.session_state:
-    st.session_state.otp = None
 if "username" not in st.session_state:
     st.session_state.username = None
 
-# 🔒 Show login page only if the user is NOT logged in
-if not st.session_state.logged_in:
-    st.title("🔐 Secure User Authentication")
-    user_email = st.text_input("Enter your email:")
 
+# Only show login fields if user is not logged in
+if not st.session_state.logged_in:
+    # Streamlit UI
+    st.title("Secure User Authentication")
+    user_email = st.text_input("Enter your email:")
+    
     if st.button("Send OTP"):
         if user_email:
-            otp = random.randint(100000, 999999)  # Generate OTP
+            otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
             if send_otp(user_email, otp):
-                st.session_state.otp = otp
-                st.session_state.email = user_email
-                st.session_state.otp_sent = True
-                st.success("✅ OTP sent! Check your email.")
+                st.session_state["otp"] = otp
+                st.session_state["email"] = user_email
+                st.success("OTP sent! Check your email.")
 
-    if st.session_state.otp_sent:
+    if "otp" in st.session_state:
         otp_input = st.text_input("Enter OTP:", type="password")
 
         if st.button("Login"):
-            if otp_input.isdigit() and int(otp_input) == st.session_state.otp:
+            if otp_input and int(otp_input) == st.session_state["otp"]:
                 st.session_state.username = st.session_state.email.split("@")[0]
                 st.session_state.logged_in = True  # ✅ Set login status only AFTER OTP verification
                 st.experimental_rerun()  # Refresh UI after login
