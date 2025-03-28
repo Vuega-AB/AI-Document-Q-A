@@ -364,8 +364,9 @@ def process_pdf(username, file, file_name, file_hash):
     text = extract_text_from_pdf(file)
     chunks = chunk_text(text)
     update_vector_db(username, chunks, file_name, file_hash)
-    save_data_to_dropbox()
+    save_data_to_dropbox(username)  # Pass the username to save in the correct folder
     return chunks
+
 
 # -----------------------------------------------------------------------------
 # AI Generation Functions
@@ -605,7 +606,7 @@ def delete_pdf(username, file_hash):
 # -----------------------------------------------------------------------------
 # save
 # -----------------------------------------------------------------------------
-async def store_in_DB(pdf_links):
+async def store_in_DB(pdf_links, username):
     async with aiohttp.ClientSession() as session:
         unique_file_hashes = set(item["file_hash"] for item in text_store)
         for pdf_link in pdf_links:
@@ -615,19 +616,20 @@ async def store_in_DB(pdf_links):
                         pdf_bytes = await response.read()
                         file_hash = hashlib.md5(pdf_bytes).hexdigest()
                         if file_hash not in unique_file_hashes:
-                                pdf_file = BytesIO(pdf_bytes)
-                                filename = os.path.basename(pdf_link)
-                                print(filename)
-                                process_pdf(pdf_file, filename, file_hash)
-                                st.success(f"Processed PDF: {filename}")
-                                unique_file_hashes.add(file_hash)
-                        else: 
-                            print(f"failed file {os.path.basename(pdf_link)}")
+                            pdf_file = BytesIO(pdf_bytes)
+                            filename = os.path.basename(pdf_link)
+                            print(filename)
+                            process_pdf(username, pdf_file, filename, file_hash)  # Pass username
+                            st.success(f"Processed PDF: {filename}")
+                            unique_file_hashes.add(file_hash)
+                        else:
+                            print(f"Failed file {os.path.basename(pdf_link)}")
                     else:
                         st.error(f"Failed to download PDF: {pdf_link}")
             except Exception as e:
                 st.error(f"Error processing {pdf_link}: {e}")
     st.success("Finished processing all PDF links.")
+
 
 # =================== Streamlit UI ============================
 
