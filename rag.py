@@ -269,7 +269,7 @@ if not st.session_state.logged_in:
             if otp_input and int(otp_input) == st.session_state["otp"]:
                 st.session_state.username = st.session_state.email.split("@")[0]
                 st.session_state.logged_in = True  # ✅ Set login status only AFTER OTP verification
-                st.experimental_rerun()  # Refresh UI after login
+                st.rerun()  # Refresh UI after login
             else:
                 st.error("❌ Incorrect OTP. Try again.")
 
