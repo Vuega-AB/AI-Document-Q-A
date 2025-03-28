@@ -78,15 +78,15 @@ except Exception as e:
     print(f"Error installing Playwright: {e}")
 
 
-# Available Together.AI models
 AVAILABLE_MODELS_DICT = {
-    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
-    "openai-4o": {"price": "Custom", "type": "openai"},
-    "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
-    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},"microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
-    "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
-    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
-}
+     "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
+     "openai-4o": {"price": "Custom", "type": "openai"},
+     "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
+     "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},
+     "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
+     "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
+     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
+ }
 AVAILABLE_MODELS = list(AVAILABLE_MODELS_DICT.keys())
 
 # Initialize session state
@@ -601,7 +601,7 @@ text_color = "#E0E0E0" if is_dark_mode else "#000000"
 user_background = "#333" if is_dark_mode else "#e3f2fd"
 user_text_color = "#FFF" if is_dark_mode else "#000"
 
-st.title("📄 IntelLaw")
+st.title("📄 AI Document Q&A and Web Scraper")
 
 # Sidebar with Tabs
 with st.sidebar:
