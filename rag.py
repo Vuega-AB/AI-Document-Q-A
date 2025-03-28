@@ -232,20 +232,12 @@ def save_user_data(data):
     dbx.files_upload(json.dumps(data).encode(), USER_DATA_FILE, mode=dropbox.files.WriteMode("overwrite"))
 
 def list_user_files(username):
+    user_folder = f"/{username}/"  # Each user gets a dedicated folder
     try:
-        metadata, response = dbx.files_download(TEXT_FILE_DROPBOX)
-        file_data = json.loads(response.content.decode("utf-8"))
-
-        # Filter files by username
-        user_files = [file for file in file_data if file["username"] == username]
-
-        st.write(f"🔍 Found {len(user_files)} files for user: {username}")
-        return user_files
-
-    except dropbox.exceptions.ApiError as e:
-        st.write(f"❌ Error retrieving files: {e}")
-        return []
-
+        files = dbx.files_list_folder(user_folder).entries
+        return [{"file_name": f.name, "file_path": f.path_lower} for f in files]
+    except dropbox.exceptions.ApiError:
+        return []  # No files or folder doesn't exist
     
 def delete_file_from_dropbox(file_path):
     try:
