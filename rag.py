@@ -215,7 +215,15 @@ def load_config(uploaded_file):
     except Exception as e:
         st.sidebar.error(f"Failed to load configuration: {e}")
 
-
+def delete_from_dropbox(file_path):
+    """
+    Deletes a file from Dropbox given its file path.
+    """
+    try:
+        dbx.files_delete_v2(file_path)
+        st.success(f"Deleted {file_path} from Dropbox.")
+    except dropbox.exceptions.ApiError as e:
+        st.error(f"Error deleting file: {e}")
 #---------------------------------------------------------------------------
 #---------------------------------------------------------------------------
 DROPBOX_USER_FILE = "/user_data.json"
@@ -306,7 +314,7 @@ def extract_text_from_pdf(file):
     return text
 # ================== Generate Response ==================
 
-def update_vector_db(texts, file_name, file_hash):
+def update_vector_db(username, texts, file_name, file_hash):
     global text_store, faiss_index
     embeddings = embedding_model.encode(texts)
     embeddings = np.array(embeddings).astype("float32")
@@ -316,6 +324,7 @@ def update_vector_db(texts, file_name, file_hash):
 
     for text in texts:
         text_store.append({
+            "username": username,
             "text": text,
             "file_name": file_name,
             "file_hash": file_hash
@@ -323,10 +332,10 @@ def update_vector_db(texts, file_name, file_hash):
 
     faiss.write_index(faiss_index, INDEX_FILE)
 
-def process_pdf(file, file_name, file_hash):
+def process_pdf(username, file, file_name, file_hash):
     text = extract_text_from_pdf(file)
     chunks = chunk_text(text)
-    update_vector_db(chunks, file_name, file_hash)
+    update_vector_db(username, chunks, file_name, file_hash)
     save_data_to_dropbox()
     return chunks
 
@@ -528,30 +537,26 @@ async def main(urls):
 # File Deletion Functions
 # -----------------------------------------------------------------------------
 
-def delete_pdf(file_hash):
-    global text_store, faiss_index
+def delete_pdf(username, file_hash):
+    global text_store
 
     try:
-        indices_to_remove = [i for i, item in enumerate(text_store) if item["file_hash"] == file_hash]
+        # Find and remove only the user's file
+        indices_to_remove = [i for i, item in enumerate(text_store) if item["file_hash"] == file_hash and item["username"] == username]
 
-        # Remove items from text_store
+        if not indices_to_remove:
+            st.error("You don't have permission to delete this file!")
+            return
+
         for index in sorted(indices_to_remove, reverse=True):
             del text_store[index]
 
-        texts = [item["text"] for item in text_store]
-        if texts:
-            embeddings = embedding_model.encode(texts)
-            embeddings = np.array(embeddings).astype("float32")
-            faiss_index = faiss.IndexFlatL2(384)
-            faiss_index.add(embeddings)
-        else:
-            faiss_index = faiss.IndexFlatL2(384)
+        # Also delete from Dropbox
+        dropbox_path = f"/users/{username}/{file_hash}.pdf"
+        delete_from_dropbox(dropbox_path)
 
-        faiss.write_index(faiss_index, INDEX_FILE)
-
-        save_data_to_dropbox()
-        st.sidebar.success(f"PDF file deleted successfully!")
-        st.rerun()  # Force a rerun to update the UI immediately
+        st.sidebar.success("PDF deleted successfully!")
+        st.rerun()  # Update UI
 
     except Exception as e:
         st.error(f"Error deleting PDF: {e}")
@@ -572,7 +577,7 @@ async def store_in_DB(pdf_links):
                                 pdf_file = BytesIO(pdf_bytes)
                                 filename = os.path.basename(pdf_link)
                                 print(filename)
-                                process_pdf(pdf_file, filename, file_hash)
+                                process_pdf(username, pdf_file, filename, file_hash)
                                 st.success(f"Processed PDF: {filename}")
                                 unique_file_hashes.add(file_hash)
                         else: 
@@ -686,58 +691,65 @@ with st.sidebar:
 
             # print(db.list_collection_names())
 
+    if "username" in st.session_state:  # Ensure user is logged in
+        username = st.session_state["username"]
+
     with tab3:
-        # Display Stored Files in MongoDB
-        st.subheader("📂 Stored Files in Database")
-        if text_store:
-                unique_file_hashes = set(item["file_hash"] for item in text_store)
+        st.subheader("📂 Your Stored Files")
 
-                for file_hash in unique_file_hashes:
-                    file_name_to_display = "Unknown"
-                    for item in text_store:
-                        if item["file_hash"] == file_hash:
-                            file_name_to_display = item["file_name"]
-                            break
+        user_files = [item for item in text_store if item["username"] == username]
 
-                    col1, col2 = st.columns([3, 1])
+        if user_files:
+            unique_file_hashes = set(item["file_hash"] for item in user_files)
 
-                    with col1:
-                        st.write(file_name_to_display)
+            for file_hash in unique_file_hashes:
+                file_name_to_display = next(item["file_name"] for item in user_files if item["file_hash"] == file_hash)
 
-                    with col2:
-                        if st.button("🗑️", key=f"delete_{file_hash}"):
-                            delete_pdf(file_hash)
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(file_name_to_display)
+                with col2:
+                    if st.button("🗑️", key=f"delete_{file_hash}"):
+                        delete_pdf(username, file_hash)  
         else:
             st.write("No documents uploaded yet.")
 
 # File Uploader for PDFs
 st.header("📤 Upload PDFs")
-# Initialize the file uploader with a unique key
-if "file_uploader_key" not in st.session_state:
-    st.session_state.file_uploader_key = 0
+if "username" in st.session_state:  # Ensure user is logged in
+    username = st.session_state["username"]
+    
+    st.header(f"📤 Upload PDFs (Logged in as {username})")
 
-uploaded_files = st.file_uploader(
-    "Upload PDFs", 
-    type="pdf", 
-    accept_multiple_files=True, 
-    key=f"file_uploader_{st.session_state.file_uploader_key}"
-)
+    if "file_uploader_key" not in st.session_state:
+        st.session_state.file_uploader_key = 0
 
-if uploaded_files:
-    for file in uploaded_files:
-        file_name = file.name
-        unique_file_hashes = set(item["file_hash"] for item in text_store)
-        file_hash = hashlib.md5(file.getvalue()).hexdigest()
-        if file_hash not in unique_file_hashes:
-            with io.BytesIO(file.getvalue()) as pdf_file:
-                process_pdf(pdf_file, file_name, file_hash)
-            # st.success(f"Processed '{file_name}'")
-        else:
-            st.info(f"File '{file_name}' has already been processed.")
+    uploaded_files = st.file_uploader(
+        "Upload PDFs", 
+        type="pdf", 
+        accept_multiple_files=True, 
+        key=f"file_uploader_{st.session_state.file_uploader_key}"
+    )
 
-    # Reset the file uploader by incrementing the key
-    st.session_state.file_uploader_key += 1
-    st.rerun()  # Force a rerun to update the UI immediately
+    if uploaded_files:
+        for file in uploaded_files:
+            file_name = file.name
+            file_hash = hashlib.md5(file.getvalue()).hexdigest()
+
+            # Check if the user already uploaded the file
+            user_files = [item for item in text_store if item["username"] == username]
+            unique_file_hashes = set(item["file_hash"] for item in user_files)
+
+            if file_hash not in unique_file_hashes:
+                with io.BytesIO(file.getvalue()) as pdf_file:
+                    process_pdf(pdf_file, file_name, file_hash, username)
+            else:
+                st.info(f"File '{file_name}' already exists in your uploads.")
+
+        # Reset file uploader
+        st.session_state.file_uploader_key += 1
+        st.rerun()
+
 
 # Chat UI with Multiple Models
 st.header("💬 Chat with Documents")
