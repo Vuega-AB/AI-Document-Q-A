@@ -224,6 +224,23 @@ def delete_from_dropbox(file_path):
         st.success(f"Deleted {file_path} from Dropbox.")
     except dropbox.exceptions.ApiError as e:
         st.error(f"Error deleting file: {e}")
+
+
+def upload_to_dropbox(username, file, file_name):
+
+    dropbox_path = f"/users/{username}/{file_name}"
+
+    try:
+        dbx.files_upload(file.getvalue(), dropbox_path, mode=dropbox.files.WriteMode("overwrite"))
+        st.success(f"Uploaded {file_name} to Dropbox.")
+        return dropbox_path  # Return file path to store in DB
+    except dropbox.exceptions.ApiError as e:
+        st.error(f"Error uploading file: {e}")
+        return None
+
+def get_user_files(username):
+    return [file for file in text_store if file["username"] == username]
+
 #---------------------------------------------------------------------------
 #---------------------------------------------------------------------------
 DROPBOX_USER_FILE = "/user_data.json"
@@ -697,20 +714,26 @@ with st.sidebar:
     with tab3:
         st.subheader("📂 Your Stored Files")
 
-        user_files = [item for item in text_store if item["username"] == username]
+        user_files = get_user_files(username)  # Get only this user's files
 
         if user_files:
             unique_file_hashes = set(item["file_hash"] for item in user_files)
 
             for file_hash in unique_file_hashes:
-                file_name_to_display = next(item["file_name"] for item in user_files if item["file_hash"] == file_hash)
+                file_name_to_display = "Unknown"
+                for item in user_files:
+                    if item["file_hash"] == file_hash:
+                        file_name_to_display = item["file_name"]
+                        break
 
                 col1, col2 = st.columns([3, 1])
+
                 with col1:
                     st.write(file_name_to_display)
+
                 with col2:
                     if st.button("🗑️", key=f"delete_{file_hash}"):
-                        delete_pdf(username, file_hash)  
+                        delete_pdf(file_hash, user_email)  # Pass user_email to ensure correct deletion
         else:
             st.write("No documents uploaded yet.")
 
