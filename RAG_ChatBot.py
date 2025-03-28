@@ -193,7 +193,7 @@ def initialize_and_load_data():
 
 embedding_model, faiss_index, text_store = initialize_and_load_data()
 
-def update_vector_db(texts, file_name, file_hash):
+def update_vector_db(username, texts, file_name, file_hash):
     global text_store, faiss_index
     embeddings = embedding_model.encode(texts)
     embeddings = np.array(embeddings).astype("float32")
@@ -203,6 +203,7 @@ def update_vector_db(texts, file_name, file_hash):
 
     for text in texts:
         text_store.append({
+            "username": username,
             "text": text,
             "file_name": file_name,
             "file_hash": file_hash
@@ -228,10 +229,10 @@ def extract_text_from_pdf(file):
             text += page_text + "\n"
     return text
 
-def process_pdf(file, file_name, file_hash):
+def process_pdf(username, file, file_name, file_hash):
     text = extract_text_from_pdf(file)
     chunks = chunk_text(text)
-    update_vector_db(chunks, file_name, file_hash)
+    update_vector_db(username, chunks, file_name, file_hash)
     save_data_to_dropbox()
     return chunks
 
@@ -253,11 +254,14 @@ def generate_response(prompt, context):
 
 # ================== Database Connection ==================
 # RAG Pipeline
-def retrieve_context(query, top_k=20):
+def retrieve_context(username, query, top_k=20):
     global text_store, faiss_index
     query_embedding = embedding_model.encode([query])
     distances, indices = faiss_index.search(query_embedding, top_k)
-    valid_indices = [i for i in indices[0] if i != -1 and i < len(text_store)]
+    valid_indices = [
+        i for i in indices[0]
+        if i != -1 and i < len(text_store) and text_store[i].get("username") == username  # Filter by user
+    ]
     retrieved_texts = [text_store[idx]["text"] for idx in valid_indices]
     return "\n\n".join(retrieved_texts) if retrieved_texts else "No relevant context found."
 
@@ -286,11 +290,18 @@ def chunk_text(text, chunk_size=400, min_chunk_length=20):
     return chunks
 # ================== delete  ==================
 
-def delete_pdf(file_hash):
+def delete_pdf(username, file_hash):
     global text_store, faiss_index
 
     try:
-        indices_to_remove = [i for i, item in enumerate(text_store) if item["file_hash"] == file_hash]
+        indices_to_remove = [
+            i for i, item in enumerate(text_store)
+            if item["file_hash"] == file_hash and item["username"] == username  # Check username
+        ]
+
+        if not indices_to_remove:
+            st.warning("You do not have permission to delete this file.")
+            return
 
         # Remove items from text_store
         for index in sorted(indices_to_remove, reverse=True):
@@ -509,6 +520,19 @@ async def main(urls):
 
 
 # =================== Streamlit UI ============================
+if st.session_state.username:  # Only show if user has logged in
+    st.sidebar.write(f"👋 Welcome, {st.session_state.username}")
+
+username = st.session_state.get("username")
+if not username:
+    st.stop()
+
+if st.sidebar.button("Logout"):
+    st.session_state.clear()  # Clears all stored session data
+    st.session_state.authenticated = False
+    st.session_state.pop("username", None)
+    st.rerun()
+
 st.title("📄 AI Document Q&A and Web Scraper")
 
 # Sidebar with Tabs
@@ -622,7 +646,7 @@ with st.sidebar:
 
                     with col2:
                         if st.button("🗑️", key=f"delete_{file_hash}"):
-                            delete_pdf(file_hash)
+                            delete_pdf(username, file_hash)
             else:
                 st.write("No documents uploaded yet.")
 
@@ -647,7 +671,7 @@ if uploaded_files:
         file_hash = hashlib.md5(file.getvalue()).hexdigest()
         if file_hash not in unique_file_hashes:
             with io.BytesIO(file.getvalue()) as pdf_file:
-                process_pdf(pdf_file, file_name, file_hash)
+                process_pdf(username, pdf_file, file_name, file_hash)
             # st.success(f"Processed '{file_name}'")
         else:
             st.info(f"File '{file_name}' has already been processed.")
@@ -668,7 +692,7 @@ if prompt := st.chat_input("Ask a question (English/Swedish)"):
     except:
         lang = "en"
         
-    context = retrieve_context(prompt)
+    context = retrieve_context(username, prompt)
     
     print(context)
     with st.spinner("Generating response..."):
