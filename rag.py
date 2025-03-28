@@ -603,6 +603,19 @@ text_color = "#E0E0E0" if is_dark_mode else "#000000"
 user_background = "#333" if is_dark_mode else "#e3f2fd"
 user_text_color = "#FFF" if is_dark_mode else "#000"
 
+if st.session_state.username:  # Only show if user has logged in
+    st.sidebar.write(f"👋 Welcome, {st.session_state.username}")
+
+username = st.session_state.get("username")
+if not username:
+    st.stop()
+
+if st.sidebar.button("Logout"):
+    st.session_state.clear()  # Clears all stored session data
+    st.session_state.authenticated = False
+    st.session_state.pop("username", None)
+    st.rerun()
+
 st.title("📄 AI Document Q&A and Web Scraper")
 
 # Sidebar with Tabs
