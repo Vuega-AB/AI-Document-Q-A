@@ -102,6 +102,7 @@ if "config" not in st.session_state:
         "vary_top_p": False
     }
 
+
 # -----------------------------------------------------------------------------
 # dropbox Functions
 # -----------------------------------------------------------------------------
@@ -176,6 +177,7 @@ def initialize_dropbox():
 dbx = initialize_dropbox()
 
 
+
 def initialize_and_load_data():
     model = SentenceTransformer("all-MiniLM-L6-v2")
     index = faiss.IndexFlatL2(384)  # Initialize a new index (in memory)
@@ -214,6 +216,69 @@ def load_config(uploaded_file):
         st.sidebar.error(f"Failed to load configuration: {e}")
 
 
+#---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
+DROPBOX_USER_FILE = "/user_data.json"
+
+# Configure email sender credentials
+EMAIL_SENDER = "nancyhisham2003@gmail.com"
+EMAIL_PASSWORD = "sike xztt teak orkr"
+
+# Function to send OTP
+def send_otp(email, otp):
+    msg = EmailMessage()
+    msg.set_content(f"Your OTP for login is: {otp}")
+    msg["Subject"] = "Your Login OTP"
+    msg["From"] = EMAIL_SENDER
+    msg["To"] = email
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        st.error(f"Error sending email: {e}")
+        return False
+
+# Initialize session state variables if they don't exist
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+
+# Only show login fields if user is not logged in
+if not st.session_state.logged_in:
+    # Streamlit UI
+    st.title("Secure User Authentication")
+    user_email = st.text_input("Enter your email:")
+    
+    if st.button("Send OTP"):
+        if user_email:
+            otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
+            if send_otp(user_email, otp):
+                st.session_state["otp"] = otp
+                st.session_state["email"] = user_email
+                st.success("OTP sent! Check your email.")
+
+    if "otp" in st.session_state:
+        otp_input = st.text_input("Enter OTP:", type="password")
+
+        if st.button("Login"):
+            if otp_input and int(otp_input) == st.session_state["otp"]:
+                st.session_state.username = st.session_state.email.split("@")[0]
+                st.session_state.logged_in = True  # ✅ Set login status only AFTER OTP verification
+                st.experimental_rerun()  # Refresh UI after login
+            else:
+                st.error("❌ Incorrect OTP. Try again.")
+
+# ✅ Show the app **ONLY AFTER LOGIN**
+if st.session_state.logged_in:
+    st.title(f"📄 Welcome, {st.session_state.username}! 🎉")
+    st.write("You're now logged in.")
+    st.subheader("AI Document Q&A and Web Scraper")
+    st.file_uploader("Upload PDFs", type=["pdf"])
 
 
 # -----------------------------------------------------------------------------
@@ -334,69 +399,6 @@ def generate_response_openAi(prompt, context, temp, top_p):
     except Exception as e:
         return f"Error generating response: {str(e)}"
 
-#---------------------------------------------------------------------------
-#---------------------------------------------------------------------------
-DROPBOX_USER_FILE = "/user_data.json"
-
-# Configure email sender credentials
-EMAIL_SENDER = "nancyhisham2003@gmail.com"
-EMAIL_PASSWORD = "sike xztt teak orkr"
-
-# Function to send OTP
-def send_otp(email, otp):
-    msg = EmailMessage()
-    msg.set_content(f"Your OTP for login is: {otp}")
-    msg["Subject"] = "Your Login OTP"
-    msg["From"] = EMAIL_SENDER
-    msg["To"] = email
-
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            server.send_message(msg)
-        return True
-    except Exception as e:
-        st.error(f"Error sending email: {e}")
-        return False
-
-# Initialize session state variables if they don't exist
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = None
-
-
-# Only show login fields if user is not logged in
-if not st.session_state.logged_in:
-    # Streamlit UI
-    st.title("Secure User Authentication")
-    user_email = st.text_input("Enter your email:")
-    
-    if st.button("Send OTP"):
-        if user_email:
-            otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
-            if send_otp(user_email, otp):
-                st.session_state["otp"] = otp
-                st.session_state["email"] = user_email
-                st.success("OTP sent! Check your email.")
-
-    if "otp" in st.session_state:
-        otp_input = st.text_input("Enter OTP:", type="password")
-
-        if st.button("Login"):
-            if otp_input and int(otp_input) == st.session_state["otp"]:
-                st.session_state.username = st.session_state.email.split("@")[0]
-                st.session_state.logged_in = True  # ✅ Set login status only AFTER OTP verification
-                st.experimental_rerun()  # Refresh UI after login
-            else:
-                st.error("❌ Incorrect OTP. Try again.")
-
-# ✅ Show the app **ONLY AFTER LOGIN**
-if st.session_state.logged_in:
-    st.title(f"📄 Welcome, {st.session_state.username}! 🎉")
-    st.write("You're now logged in.")
-    st.subheader("AI Document Q&A and Web Scraper")
-    st.file_uploader("Upload PDFs", type=["pdf"])
 
 
 # -----------------------------------------------------------------------------
