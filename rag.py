@@ -43,7 +43,10 @@ import dropbox
 import hashlib
 import openai
 import time
-
+import random
+import smtplib
+from email.message import EmailMessage
+from email_validator import validate_email, EmailNotValidError
 # ================== Environment Variables ==================
 load_dotenv()
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
@@ -213,6 +216,79 @@ def load_config(uploaded_file):
         st.sidebar.error(f"Failed to load configuration: {e}")
 
 
+
+USER_DATA_FILE = "/user_data.json"  # File path in Dropbox
+
+# Function to load user data from Dropbox
+def load_user_data():
+    try:
+        _, res = dbx.files_download(USER_DATA_FILE)
+        return json.loads(res.content)
+    except dropbox.exceptions.ApiError:
+        return {}  # Return empty dict if file doesn't exist
+
+# Function to save user data to Dropbox
+def save_user_data(data):
+    dbx.files_upload(json.dumps(data).encode(), USER_DATA_FILE, mode=dropbox.files.WriteMode("overwrite"))
+
+# =================== Email OTP Function =========================
+EMAIL_SENDER = "nancyhisham2003@gmail.com"
+EMAIL_PASSWORD = "sike xztt teak orkr"
+
+def send_otp(email, otp):
+    msg = EmailMessage()
+    msg.set_content(f"Your OTP for login is: {otp}")
+    msg["Subject"] = "Your Login OTP"
+    msg["From"] = EMAIL_SENDER
+    msg["To"] = email
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        st.error(f"Error sending email: {e}")
+        return False
+
+# =================== Authentication UI =========================
+# Initialize session state variables
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+# Load user data
+user_data = load_user_data()
+
+if not st.session_state.logged_in:
+    st.title("Secure User Authentication")
+    
+    user_email = st.text_input("Enter your email:")
+    
+    if st.button("Send OTP"):
+        if user_email:
+            otp = random.randint(100000, 999999)
+            if send_otp(user_email, otp):
+                st.session_state["otp"] = otp
+                st.session_state["email"] = user_email
+                st.success("OTP sent! Check your email.")
+
+    if "otp" in st.session_state:
+        otp_input = st.text_input("Enter OTP:", type="password")
+
+        if st.button("Login"):
+            if otp_input and int(otp_input) == st.session_state["otp"]:
+                st.session_state.username = st.session_state["email"].split("@")[0]
+                
+                # Save user to Dropbox if new
+                if user_email not in user_data:
+                    user_data[user_email] = {"email": user_email, "data": []}
+                    save_user_data(user_data)
+                
+                st.success(f"Welcome, {st.session_state.username}!")
+                st.session_state.logged_in = True
+                st.rerun()
 
 
 # -----------------------------------------------------------------------------
