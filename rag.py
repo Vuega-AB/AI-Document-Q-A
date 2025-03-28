@@ -231,6 +231,21 @@ def load_user_data():
 def save_user_data(data):
     dbx.files_upload(json.dumps(data).encode(), USER_DATA_FILE, mode=dropbox.files.WriteMode("overwrite"))
 
+def list_user_files(username):
+    user_folder = f"/{username}/"  # Each user gets a dedicated folder
+    try:
+        files = dbx.files_list_folder(user_folder).entries
+        return [{"file_name": f.name, "file_path": f.path_lower} for f in files]
+    except dropbox.exceptions.ApiError:
+        return []  # No files or folder doesn't exist
+    
+def delete_file_from_dropbox(file_path):
+    try:
+        dbx.files_delete_v2(file_path)
+        st.success("File deleted successfully!")
+    except dropbox.exceptions.ApiError as e:
+        st.error(f"Error deleting file: {e}")
+
 # =================== Email OTP Function =========================
 EMAIL_SENDER = "nancyhisham2003@gmail.com"
 EMAIL_PASSWORD = "sike xztt teak orkr"
@@ -713,29 +728,23 @@ with st.sidebar:
 
             # print(db.list_collection_names())
 
-    with tab3:
-        # Display Stored Files in MongoDB
-        st.subheader("📂 Stored Files in Database")
-        if text_store:
-                unique_file_hashes = set(item["file_hash"] for item in text_store)
+with tab3:
+    st.subheader("📂 Stored Files in Your Dropbox Account")
+    user_files = list_user_files(st.session_state.username)
 
-                for file_hash in unique_file_hashes:
-                    file_name_to_display = "Unknown"
-                    for item in text_store:
-                        if item["file_hash"] == file_hash:
-                            file_name_to_display = item["file_name"]
-                            break
-
-                    col1, col2 = st.columns([3, 1])
-
-                    with col1:
-                        st.write(file_name_to_display)
-
-                    with col2:
-                        if st.button("🗑️", key=f"delete_{file_hash}"):
-                            delete_pdf(username, file_hash)
-        else:
-            st.write("No documents uploaded yet.")
+    if user_files:
+        for file in user_files:
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.write(file["file_name"])
+            
+            with col2:
+                if st.button("🗑️", key=f"delete_{file['file_path']}"):
+                    delete_file_from_dropbox(file["file_path"])
+                    st.rerun()
+    else:
+        st.write("No documents uploaded yet.")
 
 # File Uploader for PDFs
 st.header("📤 Upload PDFs")
