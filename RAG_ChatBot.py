@@ -39,13 +39,20 @@ from google.api_core import exceptions
 import openai
 import hashlib
 from hashlib import md5
-
+import random
+import smtplib
+from email.message import EmailMessage
+from email_validator import validate_email, EmailNotValidError
 # ================== Environment Variables ==================
 load_dotenv()
-TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-MONGO_URI = os.getenv("MongoDB")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
+# GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+# MONGO_URI = os.getenv("MongoDB")
+# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+TOGETHER_API_KEY = st.secrets["TOGETHER_API_KEY"]
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+MONGO_URI = st.secrets["MongoDB"]
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
 # =================== Connections ============================
 genai.configure(api_key=GOOGLE_API_KEY)
@@ -56,6 +63,71 @@ db = mongo_client["userembeddings"]
 collection = db["embeddings"]
 
 client = Together(api_key=TOGETHER_API_KEY)
+# =================== Authentication UI =========================
+
+# Configure email sender credentials
+EMAIL_SENDER = "nancyhisham2003@gmail.com"
+EMAIL_PASSWORD = "sike xztt teak orkr"
+
+# Function to send OTP
+def send_otp(email, otp):
+    msg = EmailMessage()
+    msg.set_content(f"Your OTP for login is: {otp}")
+    msg["Subject"] = "Your Login OTP"
+    msg["From"] = EMAIL_SENDER
+    msg["To"] = email
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception as e:
+        st.error(f"Error sending email: {e}")
+        return False
+
+# Initialize session state variables if they don't exist
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+# Only show login fields if user is not logged in
+if not st.session_state.logged_in:
+    # Streamlit UI
+    st.title("Secure User Authentication")
+    user_email = st.text_input("Enter your email:")
+    
+    if st.button("Send OTP"):
+        if user_email:
+            otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
+            if send_otp(user_email, otp):
+                st.session_state["otp"] = otp
+                st.session_state["email"] = user_email
+                st.success("OTP sent! Check your email.")
+    
+    if "otp" in st.session_state:
+        otp_input = st.text_input("Enter OTP:", type="password")
+
+        if st.button("Login"):
+            if otp_input and int(otp_input) == st.session_state["otp"]:
+                # Extract username from email
+                st.session_state.username = st.session_state["email"].split("@")[0]
+                
+                # Generate user-specific collection
+                user_collection_name = f"user_{st.session_state['email'].replace('@', '_').replace('.', '_')}"
+                user_collection = db[user_collection_name]
+
+                # Store user data if new
+                if not user_collection.find_one({"email": st.session_state["email"]}):
+                    user_collection.insert_one({"email": st.session_state["email"], "data": []})
+
+                st.success(f"Welcome, {st.session_state.username}!")
+                st.session_state.logged_in = True  # Set login status
+                st.rerun()
+
+
+# =================== Main App =========================
 
 def initialize_vector_db():
     model_local = SentenceTransformer("multi-qa-mpnet-base-dot-v1")
@@ -131,13 +203,13 @@ def extract_text(file):
     return text
 # ================== Generate Response ==================
 
-def update_vector_db(texts, filehash, filename="uploaded"):
+def update_vector_db(username, texts, filehash, filename="uploaded"):
     if not texts:
         return
     embeddings = embedding_model.encode(texts).tolist()
     # embedding_array = np.array(embeddings, dtype="float32")
     # print(f"Embedding shape: {embedding_array.shape}")
-    documents = [{"filename": filename, "text": text, "filehash": filehash, "embedding": emb} for text, emb in zip(texts, embeddings)] 
+    documents = [{"username": username, "filename": filename, "text": text, "filehash": filehash, "embedding": emb} for text, emb in zip(texts, embeddings)] 
     try:
         collection.insert_many(documents, ordered=False)
     except Exception as e:
@@ -145,10 +217,10 @@ def update_vector_db(texts, filehash, filename="uploaded"):
 
     faiss_index.add(np.array(embeddings, dtype="float32"))
 
-def process_pdf(file, filehash=None, filename="uploaded"):
+def process_pdf(username, file, filehash=None, filename="uploaded"):
     text = extract_text(file)
     chunks = chunk_text(text)
-    update_vector_db(chunks, filehash, filename)
+    update_vector_db(username, chunks, filehash, filename)
     return chunks
 
 # -----------------------------------------------------------------------------
@@ -211,9 +283,12 @@ def generate_response(prompt, context, model, temp, top_p):
 # -----------------------------------------------------------------------------
 # Retrieval Function (RAG)
 # -----------------------------------------------------------------------------
-def retrieve_context(query, top_k=15):
+def retrieve_context(username, query, top_k=15):
+    if not username:
+        return []
+    
     query_embedding = embedding_model.encode([query]).tolist()[0]
-    stored_docs = list(collection.find({}, {"_id": 0, "embedding": 1, "text": 1}))
+    stored_docs = list(collection.find({"username": username}, {"_id": 0, "embedding": 1, "text": 1}))
     if not stored_docs:
         return []
     embeddings = np.array([doc["embedding"] for doc in stored_docs], dtype="float32")
@@ -311,20 +386,20 @@ async def main(urls):
 # -----------------------------------------------------------------------------
 # File Deletion Functions
 # -----------------------------------------------------------------------------
-def delete_file(filename):
-    collection.delete_many({"filename": filename})
+def delete_file(username, filename):
+    collection.delete_many({"username": username, "filename": filename})
     st.rerun()
 
-def delete_all_files():
-    collection.drop()
+def delete_all_files(username):
+    collection.delete_many({"username": username})
     st.rerun()
 
 # -----------------------------------------------------------------------------
 # File Deletion Functions
 # -----------------------------------------------------------------------------
-async def store_in_DB(pdf_links):
+async def store_in_DB(username, pdf_links):
     async with aiohttp.ClientSession() as session:
-        unique_file_hashes = set(item["filehash"] for item in collection.find({}, {"filehash": 1}))
+        unique_file_hashes = set(item["filehash"] for item in collection.find({"username": username}, {"filehash": 1}))
         for pdf_link in pdf_links:
             try:
                 async with session.get(pdf_link) as response:
@@ -352,6 +427,19 @@ border_color = "#BB86FC" if is_dark_mode else "#fc0303"
 text_color = "#E0E0E0" if is_dark_mode else "#000000"
 user_background = "#333" if is_dark_mode else "#e3f2fd"
 user_text_color = "#FFF" if is_dark_mode else "#000"
+
+if st.session_state.username:  # Only show if user has logged in
+    st.sidebar.write(f"👋 Welcome, {st.session_state.username}")
+
+username = st.session_state.get("username")
+if not username:
+    st.stop()
+
+if st.sidebar.button("Logout"):
+    st.session_state.clear()  # Clears all stored session data
+    st.session_state.authenticated = False
+    st.session_state.pop("username", None)
+    st.rerun()
 
 st.title("📄 IntelLaw")
 
@@ -448,29 +536,29 @@ with st.sidebar:
 
         pdf_files = st.file_uploader("Upload PDF documents", type=["pdf"], accept_multiple_files=True, key=f"file_uploader_{st.session_state.file_uploader_key}")
         if pdf_files:
-            unique_file_hashes = set(item["filehash"] for item in collection.find({}, {"filehash": 1}))
+            unique_file_hashes = set(item["filehash"] for item in collection.find({"username": username}, {"filehash": 1}))
             for pdf_file in pdf_files:
                 file_hash = hashlib.md5(pdf_file.getvalue()).hexdigest()
                 if file_hash in unique_file_hashes:
                     st.warning(f"⚠️ {pdf_file.name} already exists. Skipping...")
                     continue
 
-                chunks = process_pdf(pdf_file, file_hash, pdf_file.name)
+                chunks = process_pdf(username, pdf_file, file_hash, pdf_file.name)
                 unique_file_hashes.add(file_hash)
                 st.success(f"Processed {pdf_file.name}, extracted {len(chunks)} text chunks.")
             
             st.session_state.file_uploader_key += 1
             st.rerun()
             
-        stored_files = list(collection.distinct("filename"))
+        stored_files = list(collection.distinct("filename", {"username": username}))
         if stored_files:
             for filename in stored_files:
                 col1, col2 = st.columns([0.8, 0.2])
                 col1.write(f"📄 {filename}")
                 if col2.button("🗑️ Delete", key=filename):
-                    delete_file(filename)
+                    delete_file(username, filename)
             if st.button("🗑️ Delete All Files"):
-                delete_all_files()
+                delete_all_files(username)
         else:
             st.info("No files stored in the database.")
 
@@ -532,7 +620,7 @@ if prompt := st.chat_input("Ask a question"):
     
     retrieved_context = []
     with st.spinner("Processing your Query..."):
-        retrieved_context = retrieve_context(prompt)
+        retrieved_context = retrieve_context(username, prompt)
     context = " ".join(retrieved_context) if retrieved_context else "No relevant context found."
 
     # Store user input only once (not per model)

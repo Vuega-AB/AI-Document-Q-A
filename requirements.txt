@@ -18,4 +18,5 @@ openai
 pymongo
 pymupdf
 PyCryptodome
+email-validator
 # !playwright install
