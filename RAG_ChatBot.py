@@ -31,11 +31,20 @@ import dropbox
 import hashlib
 import openai
 import time
+import random
+import smtplib
+from email.message import EmailMessage
+from email_validator import validate_email, EmailNotValidError
 # ================== Environment Variables ==================
 load_dotenv()
 DROPBOX_REFRESH_TOKEN = os.getenv("DROPBOX_REFRESH_TOKEN")
 DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY")
 DROPBOX_APP_SECRET = os.getenv("DROPBOX_APP_SECRET")
+
+# DROPBOX_REFRESH_TOKEN = st.secrets["DROPBOX_REFRESH_TOKEN"]
+# DROPBOX_APP_KEY = st.secrets["DROPBOX_APP_KEY"]
+# DROPBOX_APP_SECRET = st.secrets["DROPBOX_APP_SECRET"]
+
 # Initialize models and configurations
 INDEX_FILE = "faiss_index.index"
 CONFIG_FILENAME = "config.json"

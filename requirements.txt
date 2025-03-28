@@ -16,3 +16,4 @@ aiofiles
 google-generativeai
 dropbox
 pycryptodome
+email-validator
