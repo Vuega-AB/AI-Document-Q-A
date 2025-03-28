@@ -151,19 +151,22 @@ def get_valid_access_token():
         return access_token
     return get_dropbox_access_token()
 
-def save_data_to_dropbox():
+def save_data_to_dropbox(username):
     global text_store
+    user_folder = f"/{username}/"  # Store files inside the user's directory
+
     try:
         with open(INDEX_FILE, "rb") as f:
-            dbx.files_upload(f.read(), INDEX_FILE_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
+            dbx.files_upload(f.read(), f"{user_folder}{INDEX_FILE}", mode=dropbox.files.WriteMode.overwrite)
 
         # Save text store directly to Dropbox
         text_json = json.dumps(text_store, ensure_ascii=False, indent=4).encode('utf-8')
-        dbx.files_upload(text_json, TEXT_FILE_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
+        dbx.files_upload(text_json, f"{user_folder}{TEXT_FILE_DROPBOX}", mode=dropbox.files.WriteMode.overwrite)
 
-        # st.success("Data saved to Dropbox.")
+        st.success("Data saved to Dropbox.")
     except Exception as e:
         st.error(f"Error saving data to Dropbox: {e}")
+
 
 def initialize_dropbox():
     """Initialize Dropbox client with a valid access token."""
