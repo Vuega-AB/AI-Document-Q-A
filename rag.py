@@ -273,14 +273,6 @@ if not st.session_state.logged_in:
             else:
                 st.error("❌ Incorrect OTP. Try again.")
 
-# ✅ Show the app **ONLY AFTER LOGIN**
-if st.session_state.logged_in:
-    st.title(f"📄 Welcome, {st.session_state.username}! 🎉")
-    st.write("You're now logged in.")
-    st.subheader("AI Document Q&A and Web Scraper")
-    st.file_uploader("Upload PDFs", type=["pdf"])
-
-
 # -----------------------------------------------------------------------------
 # PDF Processing Functions
 # -----------------------------------------------------------------------------
