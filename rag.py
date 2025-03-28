@@ -279,47 +279,44 @@ def send_otp(email, otp):
 # Initialize session state variables if they don't exist
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = None
 if "otp_sent" not in st.session_state:
     st.session_state.otp_sent = False
 if "otp" not in st.session_state:
     st.session_state.otp = None
+if "username" not in st.session_state:
+    st.session_state.username = None
 
-# Only show login fields if user is not logged in
+# 🔒 Show login page only if the user is NOT logged in
 if not st.session_state.logged_in:
-    st.title("Secure User Authentication")
+    st.title("🔐 Secure User Authentication")
     user_email = st.text_input("Enter your email:")
 
     if st.button("Send OTP"):
         if user_email:
-            otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
+            otp = random.randint(100000, 999999)  # Generate OTP
             if send_otp(user_email, otp):
                 st.session_state.otp = otp
                 st.session_state.email = user_email
                 st.session_state.otp_sent = True
-                st.success("OTP sent! Check your email.")
+                st.success("✅ OTP sent! Check your email.")
 
     if st.session_state.otp_sent:
         otp_input = st.text_input("Enter OTP:", type="password")
 
         if st.button("Login"):
-            if otp_input and otp_input.isdigit():
-                if int(otp_input) == st.session_state.otp:
-                    # Extract username from email
-                    st.session_state.username = st.session_state.email.split("@")[0]
-                    
-                    # Successfully logged in
-                    st.success(f"Welcome, {st.session_state.username}!")
-                    st.session_state.logged_in = True  # ✅ Set login status AFTER OTP verification
-                    st.experimental_rerun()  # Refresh UI
-                else:
-                    st.error("Incorrect OTP. Try again.")
+            if otp_input.isdigit() and int(otp_input) == st.session_state.otp:
+                st.session_state.username = st.session_state.email.split("@")[0]
+                st.session_state.logged_in = True  # ✅ Set login status only AFTER OTP verification
+                st.experimental_rerun()  # Refresh UI after login
+            else:
+                st.error("❌ Incorrect OTP. Try again.")
 
-# If logged in, hide login form and show welcome message
+# ✅ Show the app **ONLY AFTER LOGIN**
 if st.session_state.logged_in:
-    st.title(f"Welcome, {st.session_state.username}! 🎉")
+    st.title(f"📄 Welcome, {st.session_state.username}! 🎉")
     st.write("You're now logged in.")
+    st.subheader("AI Document Q&A and Web Scraper")
+    st.file_uploader("Upload PDFs", type=["pdf"])
 
 # RAG Pipeline
 def retrieve_context(query, top_k=20):
