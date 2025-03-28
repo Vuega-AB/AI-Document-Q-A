@@ -17,3 +17,6 @@ google-generativeai
 dropbox
 pycryptodome
 email-validator
+nest_asyncio
+crawl4ai
+bs4
