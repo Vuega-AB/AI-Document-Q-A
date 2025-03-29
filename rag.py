@@ -239,7 +239,8 @@ def upload_to_dropbox(username, file, file_name):
         return None
 
 def get_user_files(username):
-    return [file for file in text_store if file["username"] == username]
+    return [file for file in text_store if file.get("username") == username]
+
 
 #---------------------------------------------------------------------------
 #---------------------------------------------------------------------------
