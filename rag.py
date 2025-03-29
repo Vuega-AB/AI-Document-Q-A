@@ -43,10 +43,7 @@ import dropbox
 import hashlib
 import openai
 import time
-import random
-import smtplib
-from email.message import EmailMessage
-from email_validator import validate_email, EmailNotValidError
+
 # ================== Environment Variables ==================
 load_dotenv()
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
@@ -78,15 +75,17 @@ except Exception as e:
     print(f"Error installing Playwright: {e}")
 
 
+# Available Together.AI models
 AVAILABLE_MODELS_DICT = {
-     "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
-     "openai-4o": {"price": "Custom", "type": "openai"},
-     "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
-     "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},
-     "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
-     "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
-     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
- }
+    "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
+    "openai-4o": {"price": "Custom", "type": "openai"},
+    "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together"},
+    "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together"},
+    "microsoft/WizardLM-2-8x22B": {"price": "$1.20", "type": "together"},
+    "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together"},
+    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together"},
+}
+
 AVAILABLE_MODELS = list(AVAILABLE_MODELS_DICT.keys())
 
 # Initialize session state
@@ -101,7 +100,6 @@ if "config" not in st.session_state:
         "vary_temperature": True,
         "vary_top_p": False
     }
-
 
 # -----------------------------------------------------------------------------
 # dropbox Functions
@@ -143,13 +141,13 @@ def get_dropbox_access_token():
         raise Exception(f"Failed to refresh token: {response.text}")
 
 def get_valid_access_token():
-    """Retrieve a valid access token, refreshing if necessary."""
-    import time
-    access_token, expires_at = load_access_token()
-    if access_token and expires_at and int(time.time()) < expires_at:
-        return access_token
-    return get_dropbox_access_token()
-
+     """Retrieve a valid access token, refreshing if necessary."""
+     import time
+     access_token, expires_at = load_access_token()
+     if access_token and expires_at and int(time.time()) < expires_at:
+         return access_token
+     return get_dropbox_access_token()
+ 
 def save_data_to_dropbox():
     global text_store
     try:
@@ -175,7 +173,7 @@ def initialize_dropbox():
         return None
 
 dbx = initialize_dropbox()
-
+ 
 
 
 def initialize_and_load_data():
@@ -215,89 +213,8 @@ def load_config(uploaded_file):
     except Exception as e:
         st.sidebar.error(f"Failed to load configuration: {e}")
 
-def delete_from_dropbox(file_path):
-    """
-    Deletes a file from Dropbox given its file path.
-    """
-    try:
-        dbx.files_delete_v2(file_path)
-        st.success(f"Deleted {file_path} from Dropbox.")
-    except dropbox.exceptions.ApiError as e:
-        st.error(f"Error deleting file: {e}")
 
 
-def upload_to_dropbox(username, file, file_name):
-
-    dropbox_path = f"/users/{username}/{file_name}"
-
-    try:
-        dbx.files_upload(file.getvalue(), dropbox_path, mode=dropbox.files.WriteMode("overwrite"))
-        st.success(f"Uploaded {file_name} to Dropbox.")
-        return dropbox_path  # Return file path to store in DB
-    except dropbox.exceptions.ApiError as e:
-        st.error(f"Error uploading file: {e}")
-        return None
-
-def get_user_files(username):
-    return [file for file in text_store if file.get("username") == username]
-
-
-#---------------------------------------------------------------------------
-#---------------------------------------------------------------------------
-DROPBOX_USER_FILE = "/user_data.json"
-
-# Configure email sender credentials
-EMAIL_SENDER = "nancyhisham2003@gmail.com"
-EMAIL_PASSWORD = "sike xztt teak orkr"
-
-# Function to send OTP
-def send_otp(email, otp):
-    msg = EmailMessage()
-    msg.set_content(f"Your OTP for login is: {otp}")
-    msg["Subject"] = "Your Login OTP"
-    msg["From"] = EMAIL_SENDER
-    msg["To"] = email
-
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-            server.send_message(msg)
-        return True
-    except Exception as e:
-        st.error(f"Error sending email: {e}")
-        return False
-
-# Initialize session state variables if they don't exist
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = None
-
-
-# Only show login fields if user is not logged in
-if not st.session_state.logged_in:
-    # Streamlit UI
-    st.title("Secure User Authentication")
-    user_email = st.text_input("Enter your email:")
-    
-    if st.button("Send OTP"):
-        if user_email:
-            otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
-            if send_otp(user_email, otp):
-                st.session_state["otp"] = otp
-                st.session_state["email"] = user_email
-                st.success("OTP sent! Check your email.")
-
-    if "otp" in st.session_state:
-        otp_input = st.text_input("Enter OTP:", type="password")
-
-        if st.button("Login"):
-            if otp_input and int(otp_input) == st.session_state["otp"]:
-                st.session_state.username = st.session_state.email.split("@")[0]
-                st.session_state.logged_in = True  # ✅ Set login status only AFTER OTP verification
-                st.rerun()  # Refresh UI after login
-            else:
-                st.error("❌ Incorrect OTP. Try again.")
 
 # -----------------------------------------------------------------------------
 # PDF Processing Functions
@@ -332,41 +249,29 @@ def extract_text_from_pdf(file):
     return text
 # ================== Generate Response ==================
 
-def update_vector_db(username, texts, file_name, file_hash):
-    """Stores user-specific text chunks and their FAISS embeddings."""
+def update_vector_db(texts, file_name, file_hash):
     global text_store, faiss_index
-
     embeddings = embedding_model.encode(texts)
     embeddings = np.array(embeddings).astype("float32")
 
-    start_idx = len(text_store)  # Track where this user’s data starts
-    faiss_index.add(embeddings)  # Add new embeddings
+    start_idx = len(text_store)
+    faiss_index.add(embeddings)
 
-    # Store text chunks with user reference
     for text in texts:
         text_store.append({
-            "username": username,
             "text": text,
             "file_name": file_name,
             "file_hash": file_hash
         })
 
-    faiss.write_index(faiss_index, INDEX_FILE)  # Save FAISS index
+    faiss.write_index(faiss_index, INDEX_FILE)
 
-
-def process_pdf(username, file):
-    """Process uploaded PDF, extract text, create embeddings, and store."""
-    file.seek(0)  # Reset file pointer
+def process_pdf(file, file_name, file_hash):
     text = extract_text_from_pdf(file)
-
-    chunks = chunk_text(text)  # Split text into smaller searchable chunks
-    file_name = file.name
-    file_hash = hashlib.md5(file.getvalue()).hexdigest()
-
-    update_vector_db(username, chunks, file_name, file_hash)
-
+    chunks = chunk_text(text)
+    update_vector_db(chunks, file_name, file_hash)
+    save_data_to_dropbox()
     return chunks
-
 
 # -----------------------------------------------------------------------------
 # AI Generation Functions
@@ -428,7 +333,6 @@ def generate_response_openAi(prompt, context, temp, top_p):
         return response.choices[0].message.content
     except Exception as e:
         return f"Error generating response: {str(e)}"
-
 
 
 # -----------------------------------------------------------------------------
@@ -566,26 +470,30 @@ async def main(urls):
 # File Deletion Functions
 # -----------------------------------------------------------------------------
 
-def delete_pdf(username, file_hash):
-    global text_store
+def delete_pdf(file_hash):
+    global text_store, faiss_index
 
     try:
-        # Find and remove only the user's file
-        indices_to_remove = [i for i, item in enumerate(text_store) if item["file_hash"] == file_hash and item["username"] == username]
+        indices_to_remove = [i for i, item in enumerate(text_store) if item["file_hash"] == file_hash]
 
-        if not indices_to_remove:
-            st.error("You don't have permission to delete this file!")
-            return
-
+        # Remove items from text_store
         for index in sorted(indices_to_remove, reverse=True):
             del text_store[index]
 
-        # Also delete from Dropbox
-        dropbox_path = f"/users/{username}/{file_hash}.pdf"
-        delete_from_dropbox(dropbox_path)
+        texts = [item["text"] for item in text_store]
+        if texts:
+            embeddings = embedding_model.encode(texts)
+            embeddings = np.array(embeddings).astype("float32")
+            faiss_index = faiss.IndexFlatL2(384)
+            faiss_index.add(embeddings)
+        else:
+            faiss_index = faiss.IndexFlatL2(384)
 
-        st.sidebar.success("PDF deleted successfully!")
-        st.rerun()  # Update UI
+        faiss.write_index(faiss_index, INDEX_FILE)
+
+        save_data_to_dropbox()
+        st.sidebar.success(f"PDF file deleted successfully!")
+        st.rerun()  # Force a rerun to update the UI immediately
 
     except Exception as e:
         st.error(f"Error deleting PDF: {e}")
@@ -606,7 +514,7 @@ async def store_in_DB(pdf_links):
                                 pdf_file = BytesIO(pdf_bytes)
                                 filename = os.path.basename(pdf_link)
                                 print(filename)
-                                process_pdf(username, pdf_file)
+                                process_pdf(pdf_file, filename, file_hash)
                                 st.success(f"Processed PDF: {filename}")
                                 unique_file_hashes.add(file_hash)
                         else: 
@@ -629,20 +537,7 @@ text_color = "#E0E0E0" if is_dark_mode else "#000000"
 user_background = "#333" if is_dark_mode else "#e3f2fd"
 user_text_color = "#FFF" if is_dark_mode else "#000"
 
-if st.session_state.username:  # Only show if user has logged in
-    st.sidebar.write(f"👋 Welcome, {st.session_state.username}")
-
-username = st.session_state.get("username")
-if not username:
-    st.stop()
-
-if st.sidebar.button("Logout"):
-    st.session_state.clear()  # Clears all stored session data
-    st.session_state.authenticated = False
-    st.session_state.pop("username", None)
-    st.rerun()
-
-st.title("📄 AI Document Q&A and Web Scraper")
+st.title("📄 IntelLaw")
 
 # Sidebar with Tabs
 with st.sidebar:
@@ -720,71 +615,58 @@ with st.sidebar:
 
             # print(db.list_collection_names())
 
-    if "username" in st.session_state:  # Ensure user is logged in
-        username = st.session_state["username"]
-
     with tab3:
-        st.subheader("📂 Your Stored Files")
+        # Display Stored Files in MongoDB
+        st.subheader("📂 Stored Files in Database")
+        if text_store:
+                unique_file_hashes = set(item["file_hash"] for item in text_store)
 
-        user_files = get_user_files(username)  # Get only this user's files
+                for file_hash in unique_file_hashes:
+                    file_name_to_display = "Unknown"
+                    for item in text_store:
+                        if item["file_hash"] == file_hash:
+                            file_name_to_display = item["file_name"]
+                            break
 
-        if user_files:
-            unique_file_hashes = set(item["file_hash"] for item in user_files)
+                    col1, col2 = st.columns([3, 1])
 
-            for file_hash in unique_file_hashes:
-                file_name_to_display = "Unknown"
-                for item in user_files:
-                    if item["file_hash"] == file_hash:
-                        file_name_to_display = item["file_name"]
-                        break
+                    with col1:
+                        st.write(file_name_to_display)
 
-                col1, col2 = st.columns([3, 1])
-
-                with col1:
-                    st.write(file_name_to_display)
-
-                with col2:
-                    if st.button("🗑️", key=f"delete_{file_hash}"):
-                        delete_pdf(file_hash, user_email)  # Pass user_email to ensure correct deletion
+                    with col2:
+                        if st.button("🗑️", key=f"delete_{file_hash}"):
+                            delete_pdf(file_hash)
         else:
             st.write("No documents uploaded yet.")
 
 # File Uploader for PDFs
 st.header("📤 Upload PDFs")
-if "username" in st.session_state:  # Ensure user is logged in
-    username = st.session_state["username"]
-    
-    st.header(f"📤 Upload PDFs (Logged in as {username})")
+# Initialize the file uploader with a unique key
+if "file_uploader_key" not in st.session_state:
+    st.session_state.file_uploader_key = 0
 
-    if "file_uploader_key" not in st.session_state:
-        st.session_state.file_uploader_key = 0
+uploaded_files = st.file_uploader(
+    "Upload PDFs", 
+    type="pdf", 
+    accept_multiple_files=True, 
+    key=f"file_uploader_{st.session_state.file_uploader_key}"
+)
 
-    uploaded_files = st.file_uploader(
-        "Upload PDFs", 
-        type="pdf", 
-        accept_multiple_files=True, 
-        key=f"file_uploader_{st.session_state.file_uploader_key}"
-    )
+if uploaded_files:
+    for file in uploaded_files:
+        file_name = file.name
+        unique_file_hashes = set(item["file_hash"] for item in text_store)
+        file_hash = hashlib.md5(file.getvalue()).hexdigest()
+        if file_hash not in unique_file_hashes:
+            with io.BytesIO(file.getvalue()) as pdf_file:
+                process_pdf(pdf_file, file_name, file_hash)
+            # st.success(f"Processed '{file_name}'")
+        else:
+            st.info(f"File '{file_name}' has already been processed.")
 
-    if uploaded_files:
-        for file in uploaded_files:
-            file_name = file.name
-            file_hash = hashlib.md5(file.getvalue()).hexdigest()
-
-            # Check if the user already uploaded the file
-            user_files = [item for item in text_store if item.get("username") == username]
-            unique_file_hashes = set(item["file_hash"] for item in user_files)
-
-            if file_hash not in unique_file_hashes:
-                with io.BytesIO(file.getvalue()) as pdf_file:
-                    process_pdf(username, file)
-            else:
-                st.info(f"File '{file_name}' already exists in your uploads.")
-
-        # Reset file uploader
-        st.session_state.file_uploader_key += 1
-        st.rerun()
-
+    # Reset the file uploader by incrementing the key
+    st.session_state.file_uploader_key += 1
+    st.rerun()  # Force a rerun to update the UI immediately
 
 # Chat UI with Multiple Models
 st.header("💬 Chat with Documents")
