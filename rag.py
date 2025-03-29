@@ -761,7 +761,7 @@ if "username" in st.session_state:  # Ensure user is logged in
             file_hash = hashlib.md5(file.getvalue()).hexdigest()
 
             # Check if the user already uploaded the file
-            user_files = [item for item in text_store if item["username"] == username]
+            user_files = [item for item in text_store if item.get("username") == username]
             unique_file_hashes = set(item["file_hash"] for item in user_files)
 
             if file_hash not in unique_file_hashes:
