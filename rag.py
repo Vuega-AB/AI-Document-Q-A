@@ -322,14 +322,24 @@ def chunk_text(text, chunk_size=400, min_chunk_length=20):
     return chunks
 
 
+import io
+import PyPDF2
+
 def extract_text_from_pdf(file):
-    reader = PyPDF2.PdfReader(file)
+    if isinstance(file, str):  # If a filename string is mistakenly passed
+        raise TypeError("Expected a file-like object, got a string instead.")
+    
+    file.seek(0)  # Ensure we start at the beginning of the file
+    reader = PyPDF2.PdfReader(file)  # ✅ Works with BytesIO
     text = ""
+
     for page in reader.pages:
         page_text = page.extract_text()
         if page_text:
             text += page_text + "\n"
+
     return text
+
 # ================== Generate Response ==================
 
 def update_vector_db(username, texts, file_name, file_hash):
