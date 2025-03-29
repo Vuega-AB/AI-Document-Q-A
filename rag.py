@@ -323,14 +323,13 @@ def chunk_text(text, chunk_size=400, min_chunk_length=20):
 
 
 def extract_text_from_pdf(file):
-    file.seek(0)  # Ensure file starts from the beginning
-    reader = PyPDF2.PdfReader(file)  # ✅ Works with BytesIO
+    reader = PyPDF2.PdfReader(file)
     text = ""
     for page in reader.pages:
         page_text = page.extract_text()
-        text += page_text if page_text else ""
+        if page_text:
+            text += page_text + "\n"
     return text
-
 # ================== Generate Response ==================
 
 def update_vector_db(username, texts, file_name, file_hash):
@@ -352,12 +351,11 @@ def update_vector_db(username, texts, file_name, file_hash):
     faiss.write_index(faiss_index, INDEX_FILE)
 
 def process_pdf(username, file, file_name, file_hash):
-    file.seek(0)  # Ensure the pointer is at the start
-    text = extract_text_from_pdf(file)  # ✅ Pass BytesIO correctly
+    text = extract_text_from_pdf(file)
     chunks = chunk_text(text)
     update_vector_db(username, chunks, file_name, file_hash)
     save_data_to_dropbox()
-
+    return chunks
 
 # -----------------------------------------------------------------------------
 # AI Generation Functions
