@@ -333,13 +333,16 @@ def extract_text_from_pdf(file):
 # ================== Generate Response ==================
 
 def update_vector_db(username, texts, file_name, file_hash):
+    """Stores user-specific text chunks and their FAISS embeddings."""
     global text_store, faiss_index
+
     embeddings = embedding_model.encode(texts)
     embeddings = np.array(embeddings).astype("float32")
 
-    start_idx = len(text_store)
-    faiss_index.add(embeddings)
+    start_idx = len(text_store)  # Track where this user’s data starts
+    faiss_index.add(embeddings)  # Add new embeddings
 
+    # Store text chunks with user reference
     for text in texts:
         text_store.append({
             "username": username,
@@ -348,14 +351,22 @@ def update_vector_db(username, texts, file_name, file_hash):
             "file_hash": file_hash
         })
 
-    faiss.write_index(faiss_index, INDEX_FILE)
+    faiss.write_index(faiss_index, INDEX_FILE)  # Save FAISS index
 
-def process_pdf(username, file, file_name, file_hash):
+
+def process_pdf(username, file):
+    """Process uploaded PDF, extract text, create embeddings, and store."""
+    file.seek(0)  # Reset file pointer
     text = extract_text_from_pdf(file)
-    chunks = chunk_text(text)
+
+    chunks = chunk_text(text)  # Split text into smaller searchable chunks
+    file_name = file.name
+    file_hash = hashlib.md5(file.getvalue()).hexdigest()
+
     update_vector_db(username, chunks, file_name, file_hash)
-    save_data_to_dropbox()
+
     return chunks
+
 
 # -----------------------------------------------------------------------------
 # AI Generation Functions
