@@ -606,7 +606,7 @@ async def store_in_DB(pdf_links):
                                 pdf_file = BytesIO(pdf_bytes)
                                 filename = os.path.basename(pdf_link)
                                 print(filename)
-                                process_pdf(username, pdf_file, filename, file_hash)
+                                process_pdf(username, pdf_file)
                                 st.success(f"Processed PDF: {filename}")
                                 unique_file_hashes.add(file_hash)
                         else: 
@@ -777,7 +777,7 @@ if "username" in st.session_state:  # Ensure user is logged in
 
             if file_hash not in unique_file_hashes:
                 with io.BytesIO(file.getvalue()) as pdf_file:
-                    process_pdf(pdf_file, file_name, file_hash, username)
+                    process_pdf(username, file)
             else:
                 st.info(f"File '{file_name}' already exists in your uploads.")
 
