@@ -74,13 +74,6 @@ mongo_client_instance = None
 mongo_db_obj = None
 
 
-try:
-    import playwright
-    subprocess.run(["playwright", "install"], check=True)
-except Exception as e:
-    print(f"Error installing Playwright: {e}")
-
-
 AVAILABLE_MODELS_DICT = {
     "gemini-2.0-flash": {"price": "Custom", "type": "gemini"},
     "openai-4o": {"price": "Custom", "type": "openai"},
@@ -631,13 +624,7 @@ with st.sidebar:
                 st.success(f"Found {len(all_page_urls)} potential pages with PDF links.")
                 extracted_pdf_links_nested = []
                 with st.spinner("Extracting PDF links from pages..."):
-                    # Ensure asyncio.run is called correctly
-                    if sys.version_info >= (3, 7): # Modern Python
-                        extracted_pdf_links_nested = asyncio.run(process_scraped_links(all_page_urls))
-                    else: # Older Python, might need loop.run_until_complete if using explicit loop
-                        loop = asyncio.get_event_loop()
-                        extracted_pdf_links_nested = loop.run_until_complete(process_scraped_links(all_page_urls))
-
+                    extracted_pdf_links_nested = asyncio.run(process_scraped_links(all_page_urls))
                 unique_pdf_links = set()
                 for link_list in extracted_pdf_links_nested:
                     for link in link_list:
@@ -646,11 +633,7 @@ with st.sidebar:
                 if final_pdf_links:
                     st.write(f"**Found {len(final_pdf_links)} unique PDF links to process:**")
                     with st.spinner("Downloading and storing PDFs in selected database..."):
-                        if sys.version_info >= (3, 7):
-                            asyncio.run(store_scraped_pdfs_in_db(final_pdf_links))
-                        else:
-                            loop = asyncio.get_event_loop()
-                            loop.run_until_complete(store_scraped_pdfs_in_db(final_pdf_links))
+                        asyncio.run(store_scraped_pdfs_in_db(final_pdf_links))
                 else:
                     st.warning("No PDF links found on the scraped pages.")
             else:
@@ -658,46 +641,6 @@ with st.sidebar:
 
     with tab3:
         st.subheader(f"📂 Stored Files in {st.session_state.selected_db}")
-
-        # --- START: ADD FILE UPLOADER IN TAB3 ---
-        st.markdown("---") # Separator
-        st.markdown("##### Upload New PDFs to Database")
-        if "sidebar_file_uploader_key" not in st.session_state:
-            st.session_state.sidebar_file_uploader_key = 0
-
-        sidebar_uploaded_files = st.file_uploader(
-            "Upload PDFs here",
-            type="pdf",
-            accept_multiple_files=True,
-            key=f"sidebar_file_uploader_{st.session_state.sidebar_file_uploader_key}_{st.session_state.selected_db}"
-        )
-
-        if sidebar_uploaded_files:
-            sidebar_files_processed_this_run = False
-            # Ensure text_store is up-to-date for hash checking
-            # It should be, as it's loaded when the DB selection changes or at app start
-            existing_file_hashes_sidebar = {item["file_hash"] for item in text_store}
-
-            for file in sidebar_uploaded_files:
-                file_name = file.name
-                file_bytes = file.getvalue()
-                file_hash = hashlib.md5(file_bytes).hexdigest()
-
-                if file_hash not in existing_file_hashes_sidebar:
-                    with io.BytesIO(file_bytes) as pdf_file_like:
-                        process_pdf(pdf_file_like, file_name, file_hash) # This calls save_data()
-                    st.success(f"Processed and stored '{file_name}' in {st.session_state.selected_db} (from sidebar).")
-                    existing_file_hashes_sidebar.add(file_hash) # Add to set for this run
-                    sidebar_files_processed_this_run = True
-                else:
-                    st.info(f"File '{file_name}' (from sidebar) already exists.")
-
-            if sidebar_files_processed_this_run:
-                st.session_state.sidebar_file_uploader_key += 1
-                st.rerun() # Rerun to update the file list below and reset uploader
-        st.markdown("---") # Separator before file list
-        # --- END: ADD FILE UPLOADER IN TAB3 ---
-
         if text_store:
             unique_files_display = {}
             for item in text_store:
@@ -716,15 +659,14 @@ with st.sidebar:
         else:
             st.write(f"No documents uploaded or processed yet for {st.session_state.selected_db}.")
 
-# File Uploader for PDFs (Main page uploader - can be kept or removed if sidebar one is preferred)
 st.header("📤 Upload PDFs")
-if "main_file_uploader_key" not in st.session_state: # Renamed key to avoid conflict
-    st.session_state.main_file_uploader_key = 0
+if "file_uploader_key" not in st.session_state:
+    st.session_state.file_uploader_key = 0
 uploaded_files = st.file_uploader(
-    "Upload PDFs to selected database (Main Area)",
+    "Upload PDFs to selected database",
     type="pdf",
     accept_multiple_files=True,
-    key=f"main_file_uploader_{st.session_state.main_file_uploader_key}_{st.session_state.selected_db}"
+    key=f"file_uploader_{st.session_state.file_uploader_key}_{st.session_state.selected_db}"
 )
 if uploaded_files:
     files_processed_this_run = False
@@ -742,10 +684,9 @@ if uploaded_files:
         else:
             st.info(f"File '{file_name}' has already been processed and exists in the current view.")
     if files_processed_this_run:
-        st.session_state.main_file_uploader_key += 1
+        st.session_state.file_uploader_key += 1
         st.rerun()
 
-# ... (rest of the Chat UI code remains the same) ...
 st.header("💬 Chat with Documents")
 if prompt := st.chat_input("Ask a question about the documents..."):
     try:
