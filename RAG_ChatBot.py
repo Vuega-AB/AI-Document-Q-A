@@ -69,6 +69,13 @@ client = Together(api_key=TOGETHER_API_KEY)
 EMAIL_SENDER = "nancyhisham2003@gmail.com"
 EMAIL_PASSWORD = "sike xztt teak orkr"
 
+ALLOWED_EMAILS = {
+    "saif.mobarek@gmail.com",
+    "martha.al.jebari@Intellaw.se"
+}
+
+ALLOWED_DOMAINS = ["vuega.se"]
+
 # Function to send OTP
 def send_otp(email, otp):
     msg = EmailMessage()
@@ -101,10 +108,15 @@ if not st.session_state.logged_in:
     if st.button("Send OTP"):
         if user_email:
             otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
-            if send_otp(user_email, otp):
-                st.session_state["otp"] = otp
-                st.session_state["email"] = user_email
-                st.success("OTP sent! Check your email.")
+            email_domain = user_email.split('@')[-1]
+
+            if user_email.lower() in ALLOWED_EMAILS or email_domain.lower() in ALLOWED_DOMAINS:
+                if send_otp(user_email, otp):
+                    st.session_state["otp"] = otp
+                    st.session_state["email"] = user_email
+                    st.success("OTP sent! Check your email.")
+            else:
+                st.info("If you are a valid user, OTP will be mailed to you.")
     
     if "otp" in st.session_state:
         otp_input = st.text_input("Enter OTP:", type="password")
