@@ -1,0 +1,137 @@
+/* assets/custom.css */
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Modern sans-serif */
+    font-size: 15px; /* Base font size */
+    color: #333; /* Default text color */
+    background-color: #f4f7f6; /* Main app background */
+    line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 300; /* Lighter headings */
+    color: #343a40; /* Darker gray for headings */
+}
+
+/* --- Sidebar Styling --- */
+.custom-sidebar-tabs .nav-tabs .nav-link {
+    color: #495057; /* Slightly muted tab link color */
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    font-size: 0.9em;
+    padding: 0.6rem 1rem;
+}
+.custom-sidebar-tabs .nav-tabs .nav-link.active {
+    color: #007bff !important; /* Primary color for active tab text */
+    background-color: #fff !important;
+    border-color: #dee2e6 #dee2e6 #fff !important;
+    font-weight: 500;
+}
+.sidebar-content-area .form-control,
+.sidebar-content-area .form-select,
+.sidebar-content-area .dcc_input { /* For dcc.Input if any */
+    font-size: 0.88em;
+    border-radius: 0.2rem;
+}
+.sidebar-content-area .form-check-label {
+    font-size: 0.9em;
+}
+.sidebar-content-area hr {
+    border-top: 1px solid #e0e0e0;
+}
+#stored-files-display-list .list-group-item {
+    padding: 0.5rem 0.8rem !important;
+    font-size: 0.85em;
+    background-color: #fff; /* Ensure white background */
+    border-color: #f0f0f0; /* Lighter border */
+}
+#stored-files-display-list .list-group-item:hover {
+    background-color: #f8f9fa; /* Subtle hover */
+}
+#stored-files-display-list .list-group-item .btn {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75em;
+}
+
+/* --- Main Content & Chat Styling --- */
+.chat-container-card {
+    border: 1px solid #e0e5ec !important; /* Softer border for chat container */
+}
+.chat-input-area {
+    font-size: 0.95em;
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+.chat-input-area:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+.send-button {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    padding-left: 1rem;
+    padding-right: 1rem;
+}
+
+/* General Chat Bubble Card Style - applies to both user and AI */
+.chat-bubble-card {
+    border-radius: 18px !important; /* Slightly less rounded for a sleeker look */
+    padding: 10px 15px !important;
+    line-height: 1.5;
+    font-size: 0.92em; /* Fine-tuned font size */
+    border: none !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; /* Softer, more modern shadow */
+}
+.chat-bubble-card .card-body {
+    padding: 0 !important;
+}
+.chat-bubble-card .card-body pre {
+    margin-bottom: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: inherit;
+    font-family: inherit; /* Use body font for pre for consistency */
+    line-height: inherit;
+    color: inherit;
+}
+
+/* User Chat Bubble */
+.user-bubble {
+    background-color: #007bff !important; /* Primary blue */
+    color: white !important;
+}
+
+/* AI Chat Bubble */
+.ai-bubble {
+    background-color: #e9ecef !important; /* Light, clean gray */
+    color: #343a40 !important; /* Dark gray text */
+}
+
+/* Model Info above AI Bubble */
+.model-info-header {
+    font-size: 0.75em !important;
+    color: #6c757d !important; /* Bootstrap muted text */
+    padding-left: 5px;
+    font-style: normal; /* Remove italic if preferred */
+    text-align: left;
+}
+
+/* Slider Tooltip Styling (if LUX doesn't style it well enough) */
+.rc-slider-tooltip-inner {
+    background-color: #343a40 !important;
+    color: white !important;
+    border-radius: 3px !important;
+    padding: 3px 6px !important;
+    font-size: 0.8em !important;
+}
+.rc-slider-tooltip-arrow {
+    border-top-color: #343a40 !important;
+}
+
+/* Alert styling in sidebar */
+#sidebar-upload-status-display .alert,
+#config-upload-status .alert {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85em;
+    margin-top: 0.5rem;
+}
