@@ -1,0 +1,16 @@
+dash
+dash-bootstrap-components
+numpy
+sentence-transformers
+faiss-cpu
+requests
+beautifulsoup4
+aiohttp
+httpx
+PyPDF2
+openai
+google-generativeai
+together
+pymongo[srv]
+dropbox
+python-dotenv
