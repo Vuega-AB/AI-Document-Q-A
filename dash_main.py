@@ -710,4 +710,5 @@ def handle_chat_interaction(n_clicks, user_input_val, current_chat_history, app_
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    port = int(os.environ.get("PORT", 8050)) # Read PORT from environment, default to 8050 for local
+    app.run(debug=False, host='0.0.0.0', port=port)
