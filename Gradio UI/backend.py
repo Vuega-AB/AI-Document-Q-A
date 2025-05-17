@@ -1,4 +1,3 @@
-# backend_logic.py
 import os
 import requests
 from bs4 import BeautifulSoup
@@ -16,7 +15,7 @@ from io import BytesIO
 from together import Together
 import re
 from pymongo import MongoClient, server_api
-import logging # Kept for potential future use
+import logging 
 from openai import OpenAI
 import sys
 import httpx
@@ -26,6 +25,7 @@ from google.api_core import exceptions as google_exceptions
 import dropbox
 import hashlib
 import io
+import tempfile # For config download
 
 # --- Environment Variables & Initializations ---
 load_dotenv()
@@ -37,10 +37,10 @@ DROPBOX_REFRESH_TOKEN = os.getenv("DROPBOX_REFRESH_TOKEN")
 DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY")
 DROPBOX_APP_SECRET = os.getenv("DROPBOX_APP_SECRET")
 
-CONFIG_FILENAME = "config.json" # Currently unused in this setup, but kept if needed
+CONFIG_FILENAME = "app_config_main.json" # Used for potential saving/loading of app state itself, distinct from UI config up/down
 INDEX_FILE_DROPBOX = "/faiss_index.index"
 TEXT_FILE_DROPBOX = "/text_store.json"
-TOKEN_FILE = "dropbox_token.json" # For Dropbox token persistence
+TOKEN_FILE = "dropbox_token.json" 
 MONGO_DB_NAME = "IntelLawDB_Gradio"
 FAISS_COLLECTION_NAME = "faiss_index_store"
 TEXT_STORE_COLLECTION_NAME = "text_content_store"
@@ -54,11 +54,11 @@ mongo_client_instance = None
 mongo_db_obj = None
 embedding_model = None
 faiss_index = None
-text_store = []
+text_store = [] # List of dicts: {"text": str, "file_name": str, "file_hash": str}
 BACKEND_INITIAL_LOAD_MSG = "Backend not initialized."
 
 AVAILABLE_MODELS_DICT = {
-    "gemini-2.0-flash": {"price": "Custom", "type": "gemini", "name": "Gemini 2.0 Flash"},
+    "gemini-2.0-flash": {"price": "Custom", "type": "gemini", "name": "Gemini 2.0 Flash"}, # Assuming this is a valid Gemini model name
     "openai-4o": {"price": "Custom", "type": "openai", "name": "OpenAI GPT-4o"},
     "meta-llama/Llama-3.3-70B-Instruct-Turbo": {"price": "$0.88", "type": "together", "name": "Llama3.3 70B Turbo"},
     "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {"price": "$3.50", "type": "together", "name": "Llama3.1 405B Turbo"},
@@ -68,6 +68,8 @@ AVAILABLE_MODELS_DICT = {
 }
 AVAILABLE_MODELS_NAMES = [details['name'] for details in AVAILABLE_MODELS_DICT.values()]
 MODEL_NAME_TO_ID_MAP = {details['name']: model_id for model_id, details in AVAILABLE_MODELS_DICT.items()}
+MODEL_ID_TO_NAME_MAP = {v: k for k, v in MODEL_NAME_TO_ID_MAP.items()}
+
 
 # --- Dropbox Functions ---
 def load_access_token():
@@ -76,13 +78,13 @@ def load_access_token():
     return None, None
 
 def save_access_token(access_token, expires_in):
-    expires_at = int(time.time()) + expires_in - 300 # 5 min buffer
+    expires_at = int(time.time()) + expires_in - 300 
     with open(TOKEN_FILE, "w") as file: json.dump({"access_token": access_token, "expires_at": expires_at}, file)
 
 def get_dropbox_access_token():
     if not (DROPBOX_APP_KEY and DROPBOX_APP_SECRET and DROPBOX_REFRESH_TOKEN):
         print("Error: Dropbox credentials (APP_KEY, APP_SECRET, REFRESH_TOKEN) not fully configured.")
-        return None # Changed from raise to print for Gradio resilience
+        return None 
     response = requests.post("https://api.dropbox.com/oauth2/token", data={"grant_type": "refresh_token", "refresh_token": DROPBOX_REFRESH_TOKEN}, auth=(DROPBOX_APP_KEY, DROPBOX_APP_SECRET))
     if response.status_code == 200:
         data = response.json()
@@ -90,7 +92,7 @@ def get_dropbox_access_token():
         return data["access_token"]
     else:
         print(f"Failed to refresh Dropbox token: {response.text}")
-        return None # Changed from raise
+        return None 
 
 def get_valid_access_token():
     access_token, expires_at = load_access_token()
@@ -120,7 +122,7 @@ def initialize_mongodb_client():
     if MONGO_URI and mongo_client_instance is None:
         try:
             mongo_client_instance = MongoClient(MONGO_URI, server_api=server_api.ServerApi('1'))
-            mongo_client_instance.admin.command('ping') # Verify connection
+            mongo_client_instance.admin.command('ping') 
             mongo_db_obj = mongo_client_instance[MONGO_DB_NAME]
             print("MongoDB client initialized successfully.")
         except Exception as e:
@@ -134,85 +136,110 @@ def initialize_mongodb_client():
 def save_data_to_selected_db(selected_db):
     global faiss_index, text_store, dbx, mongo_db_obj
 
-    if selected_db == "Dropbox" and dbx is None: initialize_dropbox_client() # Attempt re-init
-    if selected_db == "MongoDB" and mongo_db_obj is None: initialize_mongodb_client() # Attempt re-init
+    if selected_db == "Dropbox" and dbx is None: initialize_dropbox_client()
+    if selected_db == "MongoDB" and mongo_db_obj is None: initialize_mongodb_client()
+
+    index_to_save = faiss_index
+    if index_to_save is None or embedding_model is None: # Handle case where index might be None
+        print("Warning: FAISS index or embedding model is None. Cannot save empty or uninitialized index.")
+        # Potentially create an empty index if it's None but model exists
+        if embedding_model and index_to_save is None:
+            index_to_save = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
+            print("Created new empty FAISS index for saving.")
+        else:
+            return # Cannot proceed
 
     if selected_db == "Dropbox":
         if dbx is None: print("Dropbox not initialized for saving."); return
         try:
             temp_idx_file = "temp_faiss_to_dropbox.index"
-            faiss.write_index(faiss_index, temp_idx_file)
+            faiss.write_index(index_to_save, temp_idx_file)
             with open(temp_idx_file, "rb") as f: dbx.files_upload(f.read(), INDEX_FILE_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
             os.remove(temp_idx_file)
             text_json = json.dumps(text_store, ensure_ascii=False, indent=4).encode('utf-8')
             dbx.files_upload(text_json, TEXT_FILE_DROPBOX, mode=dropbox.files.WriteMode.overwrite)
-            print(f"Data saved to Dropbox. Index size: {faiss_index.ntotal}, Text items: {len(text_store)}")
+            print(f"Data saved to Dropbox. Index size: {index_to_save.ntotal}, Text items: {len(text_store)}")
         except Exception as e: print(f"Error saving to Dropbox: {e}")
     elif selected_db == "MongoDB":
         if mongo_db_obj is None: print("MongoDB not initialized for saving."); return
         try:
             temp_idx_file = "temp_faiss_to_mongo.idx"
-            faiss.write_index(faiss_index, temp_idx_file)
+            faiss.write_index(index_to_save, temp_idx_file)
             with open(temp_idx_file, "rb") as f: index_bytes = f.read()
             os.remove(temp_idx_file)
             mongo_db_obj[FAISS_COLLECTION_NAME].update_one({"_id": "main_faiss_index"}, {"$set": {"index_data": index_bytes}}, upsert=True)
-            mongo_db_obj[TEXT_STORE_COLLECTION_NAME].delete_many({}) # Clear old store
+            mongo_db_obj[TEXT_STORE_COLLECTION_NAME].delete_many({}) 
             if text_store: mongo_db_obj[TEXT_STORE_COLLECTION_NAME].insert_many(text_store)
-            print(f"Data saved to MongoDB. Index size: {faiss_index.ntotal}, Text items: {len(text_store)}")
+            print(f"Data saved to MongoDB. Index size: {index_to_save.ntotal}, Text items: {len(text_store)}")
         except Exception as e: print(f"Error saving to MongoDB: {e}")
 
 def load_data_from_selected_db(selected_db):
     global faiss_index, text_store, embedding_model, dbx, mongo_db_obj
-    # Ensure embedding_model is initialized before creating a new faiss_index
     if embedding_model is None:
         print("Error: Embedding model not initialized. Cannot load data.")
         return "Embedding model not initialized. Load failed."
 
+    # Always (re)initialize to an empty index of correct dimension before loading
     faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
     text_store = []
     alert_msg = ""
 
     if selected_db == "Dropbox":
-        if dbx is None: initialize_dropbox_client() # Attempt re-init
+        if dbx is None: initialize_dropbox_client()
         if dbx is None: alert_msg = "Dropbox not initialized. Cannot load."; return alert_msg
         try:
             _, res_index = dbx.files_download(path=INDEX_FILE_DROPBOX)
             temp_idx_file = "temp_faiss_from_dropbox.index"
             with open(temp_idx_file, "wb") as f: f.write(res_index.content)
-            faiss_index = faiss.read_index(temp_idx_file)
+            loaded_index = faiss.read_index(temp_idx_file)
+            if loaded_index.d == faiss_index.d: # Check dimension compatibility
+                faiss_index = loaded_index
+            else:
+                alert_msg += f"Warning: Dropbox index dimension mismatch ({loaded_index.d} vs {faiss_index.d}). Not loading index. "
             os.remove(temp_idx_file)
 
             _, res_text = dbx.files_download(path=TEXT_FILE_DROPBOX)
             text_store = json.loads(res_text.content.decode('utf-8'))
-            alert_msg = f"Data loaded from Dropbox. {len(text_store)} text items, index has {faiss_index.ntotal} vectors."
+            alert_msg += f"Data loaded from Dropbox. {len(text_store)} text items, index has {faiss_index.ntotal} vectors."
         except dropbox.exceptions.ApiError as e:
             if isinstance(e.error, dropbox.files.DownloadError) and e.error.is_path() and e.error.get_path().is_not_found():
-                alert_msg = "No existing data on Dropbox. Initialized empty store."
-            else: alert_msg = f"Dropbox API error: {e}"
-        except Exception as e: alert_msg = f"Error loading from Dropbox: {e}"
+                alert_msg += "No existing data on Dropbox. Initialized empty store."
+            else: alert_msg += f"Dropbox API error: {e}"
+        except Exception as e: alert_msg += f"Error loading from Dropbox: {e}"
     elif selected_db == "MongoDB":
-        if mongo_db_obj is None: initialize_mongodb_client() # Attempt re-init
+        if mongo_db_obj is None: initialize_mongodb_client()
         if mongo_db_obj is None: alert_msg = "MongoDB not initialized. Cannot load."; return alert_msg
         try:
             index_doc = mongo_db_obj[FAISS_COLLECTION_NAME].find_one({"_id": "main_faiss_index"})
             if index_doc and "index_data" in index_doc:
                 temp_idx_file = "temp_faiss_from_mongo.idx"
                 with open(temp_idx_file, "wb") as f: f.write(index_doc["index_data"])
-                faiss_index = faiss.read_index(temp_idx_file)
+                loaded_index = faiss.read_index(temp_idx_file)
+                if loaded_index.d == faiss_index.d: # Check dimension compatibility
+                    faiss_index = loaded_index
+                else:
+                    alert_msg += f"Warning: MongoDB index dimension mismatch ({loaded_index.d} vs {faiss_index.d}). Not loading index. "
                 os.remove(temp_idx_file)
-            else: # No index found, ensure faiss_index is empty
-                faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
-
-
+            
             text_docs = list(mongo_db_obj[TEXT_STORE_COLLECTION_NAME].find({}))
             text_store = [{k: v for k, v in doc.items() if k != '_id'} for doc in text_docs]
-            alert_msg = f"Data loaded from MongoDB. {len(text_store)} text items, index has {faiss_index.ntotal} vectors."
-            if not index_doc and not text_docs:
+            alert_msg += f"Data loaded from MongoDB. {len(text_store)} text items, index has {faiss_index.ntotal} vectors."
+            if not index_doc and not text_docs and not alert_msg: # only if no other message
                 alert_msg = "No existing data on MongoDB. Initialized empty store."
-        except Exception as e: alert_msg = f"Error loading from MongoDB: {e}"
+        except Exception as e: alert_msg += f"Error loading from MongoDB: {e}"
     
+    # If faiss_index has items but text_store is empty, or vice-versa (after load attempts), this is an inconsistency.
+    if faiss_index.ntotal > 0 and not text_store:
+        alert_msg += " Warning: Index has vectors but text store is empty. Data might be corrupt. Clearing index."
+        faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
+    elif not faiss_index.ntotal and text_store:
+        # This could happen if index load failed but text_store loaded. Potentially re-index if desired, or warn.
+        alert_msg += " Warning: Text store loaded but index is empty/failed to load. Consider re-indexing or checking data integrity."
+
+
     print(f"Load attempt for {selected_db}: {alert_msg}")
-    return alert_msg
+    return alert_msg if alert_msg else "Data loaded successfully. Store might be empty."
+
 
 # --- PDF Processing ---
 def chunk_text(text, chunk_size=400, min_chunk_length=20):
@@ -239,11 +266,18 @@ def extract_text_from_pdf_bytes(pdf_bytes):
 def process_and_add_pdf_core(pdf_bytes, file_name, selected_db):
     global text_store, faiss_index, embedding_model
     if embedding_model is None: return "Embedding model not initialized.", False
-    if faiss_index is None: return "FAISS index not initialized.", False
+    if faiss_index is None: # Should be initialized by load_data or globally
+        if embedding_model: faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
+        else: return "FAISS index not initialized and embedding model missing.", False
 
     file_hash = hashlib.md5(pdf_bytes).hexdigest()
-    if any(item.get('file_hash') == file_hash for item in text_store): # .get for safety
-        return f"File '{file_name}' (hash: {file_hash[:7]}) already exists.", False
+    # Check if any chunk from this file_hash already exists
+    # More accurate: check if a file_name with this hash is already fully represented
+    # For simplicity, checking if *any* chunk with this hash exists is a quick check,
+    # but a more robust check would be against unique file identifiers.
+    # Current logic: if any chunk has this file_hash, assume file is present.
+    if any(item.get('file_hash') == file_hash for item in text_store if isinstance(item, dict)):
+        return f"File '{file_name}' (hash: {file_hash[:7]}) seems to already exist based on hash.", False
     
     raw_text = extract_text_from_pdf_bytes(pdf_bytes)
     if not raw_text.strip():
@@ -260,19 +294,23 @@ def process_and_add_pdf_core(pdf_bytes, file_name, selected_db):
     for chunk_text_content in chunks:
         text_store.append({"text": chunk_text_content, "file_name": file_name, "file_hash": file_hash})
     
-    save_data_to_selected_db(selected_db) # Persist after adding
+    # save_data_to_selected_db(selected_db) # Moved out, to be called by parent function after batch
     return f"Processed and added '{file_name}'. Chunks: {len(chunks)}, Index size: {faiss_index.ntotal}", True
+
 
 # --- AI Response Generation ---
 def generate_response_gemini(prompt, context, temp, top_p, system_prompt):
-    if not gemini_model_genai: return "Gemini client not initialized (API key missing or failed init)."
+    if not gemini_model_genai: return "Gemini client not initialized."
+    # Ensure model_name in genai.GenerativeModel is correct, e.g., "gemini-1.5-flash" or "gemini-pro"
+    # The provided "gemini-2.0-flash" might need to be "gemini-1.5-flash-latest" or similar
+    # For now, assuming a compatible model is set during gemini_model_genai initialization
     input_parts = [system_prompt + "\nContext: " + context, "Question: " + prompt]
     config = genai.GenerationConfig(max_output_tokens=2048, temperature=temp, top_p=top_p)
     try: response = gemini_model_genai.generate_content(input_parts, generation_config=config); return response.text
     except Exception as e: return f"Gemini Error: {e}"
 
 def generate_response_together_ai(prompt, context, model_id, temp, top_p, system_prompt):
-    if not together_client: return "TogetherAI client not initialized (API key missing or failed init)."
+    if not together_client: return "TogetherAI client not initialized."
     try:
         response = together_client.chat.completions.create(
             model=model_id, messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Context: {context}\nQuestion: {prompt}"}],
@@ -282,7 +320,7 @@ def generate_response_together_ai(prompt, context, model_id, temp, top_p, system
     except Exception as e: return f"TogetherAI Error ({model_id}): {e}"
 
 def generate_response_openai_api(prompt, context, temp, top_p, system_prompt):
-    if not openai_client: return "OpenAI client not initialized (API key missing or failed init)."
+    if not openai_client: return "OpenAI client not initialized."
     try:
         response = openai_client.chat.completions.create(
             model="gpt-4o", messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": f"Context: {context}\nQuestion: {prompt}"}],
@@ -291,6 +329,7 @@ def generate_response_openai_api(prompt, context, temp, top_p, system_prompt):
         return response.choices[0].message.content
     except Exception as e: return f"OpenAI Error: {e}"
 
+
 # --- RAG ---
 def retrieve_context_from_db(query, top_k=5):
     global text_store, faiss_index, embedding_model
@@ -298,24 +337,32 @@ def retrieve_context_from_db(query, top_k=5):
     if faiss_index is None or faiss_index.ntotal == 0: return "No documents indexed."
     
     query_embedding = embedding_model.encode([query])
-    distances, indices = faiss_index.search(query_embedding.astype(np.float32), top_k)
+    query_embedding_np = np.array(query_embedding).astype("float32")
     
-    valid_indices = [i for i in indices[0] if 0 <= i < len(text_store)]
-    retrieved_texts = [text_store[idx]["text"] for idx in valid_indices]
+    # Ensure query embedding has the same dimension as the index
+    if query_embedding_np.shape[1] != faiss_index.d:
+        return f"Query embedding dimension ({query_embedding_np.shape[1]}) does not match FAISS index dimension ({faiss_index.d})."
+
+    distances, indices = faiss_index.search(query_embedding_np, top_k)
+    
+    valid_indices = [i for i in indices[0] if 0 <= i < len(text_store)] # Ensure indices are valid
+    # Further check: ensure text_store[idx] is a dict and has 'text'
+    retrieved_texts = [text_store[idx]["text"] for idx in valid_indices if isinstance(text_store[idx], dict) and "text" in text_store[idx]]
     return "\n\n".join(retrieved_texts) if retrieved_texts else "No relevant context found."
 
-# --- Web Scraping ---
+
+# --- Web Scraping (Async functions as previously defined) ---
 async def fetch_page_async(url):
     async with httpx.AsyncClient() as client:
         response = await client.get(url, timeout=30.0, follow_redirects=True)
-        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status() 
         return response.text, str(response.url)
 
 async def extract_pdf_links_from_url_async(url):
     try:
-        html, base_url = await fetch_page_async(url)
+        html, base_url_resolved = await fetch_page_async(url) # Renamed base_url to base_url_resolved
         soup = BeautifulSoup(html, "html.parser")
-        return [urljoin(base_url, a["href"]) for a in soup.find_all("a", href=True) if ".pdf" in a["href"].lower()]
+        return [urljoin(base_url_resolved, a["href"]) for a in soup.find_all("a", href=True) if ".pdf" in a["href"].lower()]
     except Exception as e:
         print(f"Error scraping {url} for PDF links: {e}")
         return []
@@ -327,13 +374,14 @@ async def process_scraped_pdf_links_async(urls):
         all_pdf_links.update(url_group)
     return list(all_pdf_links)
 
-async def download_and_process_scraped_pdf(session, pdf_link, selected_db):
+async def download_and_process_scraped_pdf(session, pdf_link, selected_db): # selected_db passed for context, actual saving done after batch
     try:
         async with session.get(pdf_link, timeout=60) as response:
             if response.status == 200:
                 pdf_bytes = await response.read()
                 filename = os.path.basename(pdf_link)
-                status_msg, success = process_and_add_pdf_core(pdf_bytes, filename, selected_db)
+                # process_and_add_pdf_core now returns status and success, doesn't save itself.
+                status_msg, success = process_and_add_pdf_core(pdf_bytes, filename, selected_db) 
                 return status_msg, success, filename
             return f"Failed to download {pdf_link} (status: {response.status})", False, os.path.basename(pdf_link)
     except Exception as e:
@@ -341,8 +389,7 @@ async def download_and_process_scraped_pdf(session, pdf_link, selected_db):
 
 async def batch_download_and_process_pdfs(pdf_links, selected_db):
     results = []
-    # Consider using aiohttp_retry or similar for more robust downloads
-    connector = aiohttp.TCPConnector(ssl=False) # Add ssl=False if SSL verification issues
+    connector = aiohttp.TCPConnector(ssl=False) 
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = [download_and_process_scraped_pdf(session, link, selected_db) for link in pdf_links]
         for result in await asyncio.gather(*tasks):
@@ -366,49 +413,54 @@ def get_all_page_urls_for_scraping(base_url_val, listing_endpoint_val, paginatio
     all_page_urls_to_scrape = set()
     for page_num in range(1, int(num_pages_val) + 1):
         url_path = f"{listing_endpoint_val}/{pagination_format_val}{page_num}"
-        # Ensure no double slashes if base_url ends with / and listing_endpoint starts with /
         url = urljoin(base_url_val + ("/" if not base_url_val.endswith("/") else ""), url_path)
-
         page_items = get_page_items_sync(url, base_url_val, listing_endpoint_val)
-        if not page_items and page_num > 1 : # Stop if a page (after first) returns no items
+        if not page_items and page_num > 1 : 
             print(f"No items found on page {page_num} ({url}), stopping pagination.")
             break
         all_page_urls_to_scrape.update(page_items)
-        if not page_items and page_num == 1: # If first page is empty, inform and stop
+        if not page_items and page_num == 1: 
              print(f"No items found on the first page ({url}). Check scraper settings.")
              break
     return list(all_page_urls_to_scrape)
 
+# --- UI Callable Backend Functions ---
 
-# --- Backend Functions Callable by UI ---
-
-def get_current_file_list_md_backend():
+def get_unique_filenames_from_text_store():
     global text_store
-    files_md = "#### Stored Files\n---\n"
-    if text_store:
-        unique_files = {} # Using hash to identify unique files
-        for item in text_store:
-            # Ensure item is a dict and has 'file_hash' and 'file_name'
-            if isinstance(item, dict) and 'file_hash' in item and 'file_name' in item:
-                 if item["file_hash"] not in unique_files:
-                    unique_files[item["file_hash"]] = item["file_name"]
-            else:
-                # Handle cases where item might not be a dict (e.g. during loading errors)
-                print(f"Warning: Encountered non-dict item in text_store: {item}")
+    if not text_store: return []
+    unique_files = {} 
+    for item in text_store:
+        if isinstance(item, dict) and 'file_hash' in item and 'file_name' in item:
+            if item["file_hash"] not in unique_files:
+                unique_files[item["file_hash"]] = item["file_name"]
+    return sorted(list(unique_files.values()))
 
-
-        if unique_files:
-            for f_name in unique_files.values():
-                files_md += f"- {f_name}\n"
-        else:
-            files_md += "_No unique files found in current store (check hashes)._\n"
+def _build_file_list_updates():
+    """Generates the gr.update objects for file list UI elements."""
+    filenames = get_unique_filenames_from_text_store()
+    
+    md_output = "#### Current Files in Database\n---\n"
+    if filenames:
+        for f_name in filenames:
+            md_output += f"- {f_name}\n"
     else:
-        files_md += "_No files in this database._\n"
-    return files_md
+        md_output += "_No files currently in this database._\n"
+    
+    checkbox_group_update = gradio.update(choices=filenames, value=[]) 
+    markdown_update = gradio.update(value=md_output)
+    
+    return checkbox_group_update, markdown_update
+
+# Used for initial UI population for stored_files_md
+def get_current_file_list_md_backend():
+    _ , md_update = _build_file_list_updates()
+    return md_update.get('value', "_Error generating file list._")
+
 
 def update_app_config_backend(models_names, vary_t, temp, vary_p, top_p, sys_prompt, current_app_config_state):
     selected_model_ids = [MODEL_NAME_TO_ID_MAP[name] for name in models_names if name in MODEL_NAME_TO_ID_MAP]
-    if len(selected_model_ids) > 3: selected_model_ids = selected_model_ids[:3]
+    if len(selected_model_ids) > 3: selected_model_ids = selected_model_ids[:3] # Enforce max 3
     
     current_app_config_state.update({
         "selected_models": selected_model_ids,
@@ -418,69 +470,172 @@ def update_app_config_backend(models_names, vary_t, temp, vary_p, top_p, sys_pro
     })
     return "Configuration updated.", current_app_config_state
 
-def switch_db_backend(selected_db_val, current_selected_db_state_value): # state is passed as value
+def switch_db_backend(selected_db_val, current_selected_db_state_value): 
     if selected_db_val == current_selected_db_state_value:
-        return current_selected_db_state_value, f"Already using {selected_db_val}. No change.", get_current_file_list_md_backend()
-
-    status_message = load_data_from_selected_db(selected_db_val)
-    return selected_db_val, status_message, get_current_file_list_md_backend()
+        db_status_msg = f"Already using {selected_db_val}. No change."
+    else:
+        db_status_msg = load_data_from_selected_db(selected_db_val)
+    
+    cb_update, md_update = _build_file_list_updates()
+    return selected_db_val, db_status_msg, cb_update, md_update
 
 def handle_pdf_upload_backend(files_obj_list, selected_db_from_state):
     if files_obj_list is None:
-        return "No files uploaded.", get_current_file_list_md_backend()
+        cb_update, md_update = _build_file_list_updates()
+        return "No files uploaded.", cb_update, md_update
 
     alerts = []
+    any_successful_upload = False
     for file_obj in files_obj_list:
-        file_path = file_obj.name # Gradio file object's name attribute is the temp file path
-        file_display_name = os.path.basename(file_path) # Use original filename if possible
-        
-        # If file_obj has an attribute like 'orig_name', prefer that for display
-        # For gr.Files, file_obj.name is temp path, file_obj.orig_name might be actual name
-        # If not, os.path.basename on temp path is a fallback.
-        # For simplicity, assuming file_obj.name gives usable name or temp path.
+        file_path = file_obj.name 
+        file_display_name = os.path.basename(getattr(file_obj, 'orig_name', file_path)) # Try to get original name
         
         with open(file_path, 'rb') as f:
             pdf_bytes = f.read()
         
         status_msg, success = process_and_add_pdf_core(pdf_bytes, file_display_name, selected_db_from_state)
         alerts.append(status_msg)
+        if success: any_successful_upload = True
     
-    status_summary = "\n".join(alerts)
-    return status_summary, get_current_file_list_md_backend()
+    if any_successful_upload:
+        save_data_to_selected_db(selected_db_from_state) # Save after all successful uploads in batch
 
-def chat_interface_backend(user_input, chat_history_list, selected_db_state, app_config_state):
+    status_summary = "\n".join(alerts)
+    cb_update, md_update = _build_file_list_updates()
+    return status_summary, cb_update, md_update
+
+def delete_files_backend(filenames_to_delete, selected_db):
+    global text_store, faiss_index, embedding_model
+    if not filenames_to_delete:
+        cb_update, md_update = _build_file_list_updates()
+        return "No files selected for deletion.", cb_update, md_update
+
+    if embedding_model is None or faiss_index is None:
+        cb_update, md_update = _build_file_list_updates()
+        return "Error: Core components (embedding model or FAISS index) not ready. Deletion aborted.", cb_update, md_update
+
+    # Identify original indices of chunks and vectors to keep
+    kept_text_store_entries_with_original_indices = []
+    for i, item in enumerate(text_store):
+        if isinstance(item, dict) and item.get("file_name") not in filenames_to_delete:
+            kept_text_store_entries_with_original_indices.append((i, item))
+
+    if len(kept_text_store_entries_with_original_indices) == len(text_store):
+        cb_update, md_update = _build_file_list_updates()
+        return "Selected files not found or no changes made.", cb_update, md_update
+        
+    new_text_store = [item for _, item in kept_text_store_entries_with_original_indices]
+    
+    # Rebuild FAISS index
+    new_faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
+    if kept_text_store_entries_with_original_indices: # only if there's anything to keep
+        original_indices_to_keep = [original_idx for original_idx, _ in kept_text_store_entries_with_original_indices]
+        
+        # Ensure all original_indices_to_keep are valid for current faiss_index.ntotal
+        valid_original_indices_to_keep = [idx for idx in original_indices_to_keep if idx < faiss_index.ntotal]
+
+        if valid_original_indices_to_keep:
+            vectors_to_keep = faiss_index.reconstruct_n(0, faiss_index.ntotal) # Get all vectors
+            kept_vectors = vectors_to_keep[valid_original_indices_to_keep, :] # Select rows by list of indices
+            if kept_vectors.shape[0] > 0:
+                 new_faiss_index.add(kept_vectors.astype("float32"))
+        else:
+             print("Warning: No valid vectors to keep after filtering indices for deletion.")
+
+    text_store = new_text_store
+    faiss_index = new_faiss_index
+    
+    save_data_to_selected_db(selected_db)
+    
+    num_deleted = len(filenames_to_delete) # Approximation
+    status_msg = f"Successfully deleted {num_deleted} file(s) and their associated data. Index rebuilt."
+    
+    cb_update, md_update = _build_file_list_updates()
+    return status_msg, cb_update, md_update
+
+
+def apply_uploaded_config_backend(config_file_obj, current_app_config_state_dict):
+    if config_file_obj is None:
+        return "No config file uploaded.", current_app_config_state_dict, *[gradio.update()]*6 
+
+    try:
+        with open(config_file_obj.name, 'r') as f:
+            new_config = json.load(f)
+
+        # Validate and update - be careful about partial updates or missing keys
+        # For simplicity, direct update. Add validation as needed.
+        current_app_config_state_dict.update(new_config)
+        
+        # Prepare UI updates based on the new state
+        sel_model_ids = current_app_config_state_dict.get("selected_models", [])
+        model_names_for_ui = [MODEL_ID_TO_NAME_MAP[mid] for mid in sel_model_ids if mid in MODEL_ID_TO_NAME_MAP]
+
+        return (
+            "Configuration loaded successfully from file.",
+            current_app_config_state_dict, # Return the updated state dict
+            gradio.update(value=model_names_for_ui),
+            gradio.update(value=current_app_config_state_dict.get("vary_temperature", True)),
+            gradio.update(value=current_app_config_state_dict.get("temperature", 0.7)),
+            gradio.update(value=current_app_config_state_dict.get("vary_top_p", False)),
+            gradio.update(value=current_app_config_state_dict.get("top_p", 0.9)),
+            gradio.update(value=current_app_config_state_dict.get("system_prompt", ""))
+        )
+    except Exception as e:
+        error_msg = f"Error loading config: {e}"
+        # Return error and no change to UI elements (or current state)
+        return error_msg, current_app_config_state_dict, *[gradio.update()]*6
+
+
+def generate_config_for_download_backend(current_app_config_state_dict):
+    try:
+        # Create a temporary file to hold the config
+        # delete=False is important as Gradio needs the file to exist when it serves it.
+        # Gradio typically cleans up its own temp files.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding='utf-8') as tmp_file:
+            json.dump(current_app_config_state_dict, tmp_file, indent=2)
+            tmp_file_path = tmp_file.name
+        
+        # Return the path to the temporary file. Gradio's gr.File output will make it downloadable.
+        return tmp_file_path, "Config file ready for download."
+    except Exception as e:
+        return None, f"Error generating config file: {e}"
+
+
+def chat_interface_backend(user_input, chat_history_list, selected_db_state_val, app_config_state_dict): # Use state values directly
     if not user_input or not user_input.strip():
-        # Return current history and empty response if no input
         return chat_history_list, "" 
 
-    chat_history_list.append((user_input, None)) # Add user query to history
+    chat_history_list.append((user_input, None)) 
 
     context_text = retrieve_context_from_db(user_input)
     
     model_responses_html = ""
-    temp_config = app_config_state['temperature']
-    top_p_config = app_config_state['top_p']
-    system_prompt_config = app_config_state['system_prompt']
+    temp_config = app_config_state_dict['temperature']
+    top_p_config = app_config_state_dict['top_p']
+    system_prompt_config = app_config_state_dict['system_prompt']
     
     temp_values_to_run = [temp_config]
-    if app_config_state['vary_temperature'] and temp_config > 0.01: # Avoid 0 or too small values
+    if app_config_state_dict['vary_temperature'] and temp_config > 0.01: 
         temp_values_to_run = sorted(list(set([
             round(max(0.01, temp_config * 0.5), 2), temp_config, 
             round(min(1.0, temp_config * 1.5), 2) if temp_config * 1.5 <=1.0 else temp_config])))
 
     top_p_values_to_run = [top_p_config]
-    if app_config_state['vary_top_p'] and top_p_config > 0.01:
+    if app_config_state_dict['vary_top_p'] and top_p_config > 0.01:
         top_p_values_to_run = sorted(list(set([
             round(max(0.01, top_p_config * 0.5), 2), top_p_config,
             round(min(1.0, top_p_config * 1.5),2) if top_p_config * 1.5 <= 1.0 else top_p_config])))
         
-    selected_ai_model_ids = app_config_state.get('selected_models', [])
+    selected_ai_model_ids = app_config_state_dict.get('selected_models', [])
     if not selected_ai_model_ids:
         ai_response_text = "System: No AI model selected in configuration."
-        # chat_history_list.append((None, ai_response_text)) # This adds to history; HTML is separate
         model_responses_html = f"<p>{ai_response_text}</p>"
+        # Update chat history with this system message if desired (currently only in HTML)
+        if chat_history_list: # Ensure there's a user query to respond to
+             chat_history_list[-1] = (user_input, ai_response_text)
+
     else:
-        combined_ai_responses_for_chat_display = [] # For chat history
+        combined_ai_responses_for_chat_display = [] 
         for model_id in selected_ai_model_ids:
             model_detail = AVAILABLE_MODELS_DICT.get(model_id, {})
             model_type = model_detail.get("type")
@@ -500,14 +655,13 @@ def chat_interface_backend(user_input, chat_history_list, selected_db_state, app
                     combined_ai_responses_for_chat_display.append(f"--- {model_info_str} ---\n{response_content}")
                     model_responses_html += f"<div><h4>{model_info_str}</h4><pre style='white-space: pre-wrap; word-break: break-word;'>{response_content}</pre><hr/></div>"
 
-                    if not app_config_state['vary_top_p']: break # Only run once if not varying
-                if not app_config_state['vary_temperature']: break # Only run once if not varying
+                    if not app_config_state_dict['vary_top_p']: break 
+                if not app_config_state_dict['vary_temperature']: break 
         
-        if combined_ai_responses_for_chat_display:
-            chat_history_list[-1] = (user_input, "\n\n".join(combined_ai_responses_for_chat_display)) # Update the last entry's response
-        else: # If no models ran or all failed without specific messages being added
+        if combined_ai_responses_for_chat_display and chat_history_list:
+            chat_history_list[-1] = (user_input, "\n\n".join(combined_ai_responses_for_chat_display)) 
+        elif chat_history_list: 
             chat_history_list[-1] = (user_input, "No responses generated or models configured.")
-
 
     return chat_history_list, model_responses_html
 
@@ -519,39 +673,60 @@ def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_v
     status_updates = ["Starting scraping..."]
     page_urls_to_scan = get_all_page_urls_for_scraping(base_url, endpoint, pagination, num_pages)
     status_updates.append(f"Found {len(page_urls_to_scan)} site pages to scan for PDF links.")
-    if not page_urls_to_scan:
-        return "\n".join(status_updates), get_current_file_list_md_backend()
     
-    pdf_links_found = asyncio.run(process_scraped_pdf_links_async(page_urls_to_scan))
-    status_updates.append(f"Found {len(pdf_links_found)} unique PDF links.")
-    if not pdf_links_found:
-        return "\n".join(status_updates), get_current_file_list_md_backend()
+    any_successful_scrape_process = False
+    if page_urls_to_scan:
+        pdf_links_found = asyncio.run(process_scraped_pdf_links_async(page_urls_to_scan))
+        status_updates.append(f"Found {len(pdf_links_found)} unique PDF links.")
+        
+        if pdf_links_found:
+            status_updates.append(f"Starting PDF download and processing for {len(pdf_links_found)} links...")
+            # batch_download_and_process_pdfs updates text_store and faiss_index internally via process_and_add_pdf_core
+            processing_results = asyncio.run(batch_download_and_process_pdfs(pdf_links_found, selected_db_val))
+            
+            success_count = 0
+            processed_files_messages = []
+            for msg, success, fname in processing_results:
+                processed_files_messages.append(f"{fname}: {msg} ({'Success' if success else 'Failed'})")
+                if success: success_count += 1; any_successful_scrape_process = True
+            
+            status_updates.append(f"\n--- PDF Processing Results ---")
+            status_updates.extend(processed_files_messages)
+            status_updates.append(f"\nScraping finished. Processed {success_count} new PDFs out of {len(pdf_links_found)} found.")
+    else:
+        status_updates.append("No site pages found to scan based on current settings.")
 
-    status_updates.append(f"Starting PDF download and processing for {len(pdf_links_found)} links...")
-    processing_results = asyncio.run(batch_download_and_process_pdfs(pdf_links_found, selected_db_val))
-    
-    success_count = 0
-    processed_files_messages = []
-    for msg, success, fname in processing_results:
-        processed_files_messages.append(f"{fname}: {msg} ({'Success' if success else 'Failed'})")
-        if success: success_count += 1
-    
-    status_updates.append(f"\n--- PDF Processing Results ---")
-    status_updates.extend(processed_files_messages)
-    status_updates.append(f"\nScraping finished. Processed {success_count} new PDFs out of {len(pdf_links_found)} found.")
-    return "\n".join(status_updates), get_current_file_list_md_backend()
+    if any_successful_scrape_process:
+        save_data_to_selected_db(selected_db_val) # Save after all successful scrapes
+
+    cb_update, md_update = _build_file_list_updates()
+    return "\n".join(status_updates), cb_update, md_update
 
 
 # --- Backend Initialization ---
+# Ensure Gradio is imported for gr.update before this runs if functions use it.
+import gradio # For gr.update
+
 def initialize_all_components(default_db="Dropbox"):
     global gemini_model_genai, together_client, openai_client, embedding_model, faiss_index, BACKEND_INITIAL_LOAD_MSG
 
     print("Initializing backend components...")
-    # Initialize API clients
     if GOOGLE_API_KEY:
         genai.configure(api_key=GOOGLE_API_KEY)
-        gemini_model_genai = genai.GenerativeModel("gemini-2.0-flash") # Corrected model name if needed
-        print("Gemini client configured.")
+        # Use a confirmed valid model name, e.g., "gemini-1.5-flash-latest" or "gemini-pro"
+        # The string "gemini-2.0-flash" might not be a valid model identifier.
+        # Let's use a common one for example, user should verify this:
+        try:
+            gemini_model_genai = genai.GenerativeModel("gemini-1.5-flash-latest") 
+            print("Gemini client configured with gemini-1.5-flash-latest.")
+        except Exception as e:
+            print(f"Failed to initialize Gemini client with 'gemini-1.5-flash-latest': {e}. Trying 'gemini-pro'.")
+            try:
+                gemini_model_genai = genai.GenerativeModel("gemini-pro")
+                print("Gemini client configured with gemini-pro.")
+            except Exception as e_pro:
+                 print(f"Failed to initialize Gemini client with 'gemini-pro': {e_pro}. Gemini features may be affected.")
+
     else:
         print("Warning: GOOGLE_API_KEY not found. Gemini features will be disabled.")
 
@@ -567,23 +742,20 @@ def initialize_all_components(default_db="Dropbox"):
     else:
         print("Warning: OPENAI_API_KEY not found. OpenAI features will be disabled.")
 
-    # Initialize Sentence Transformer model
     try:
         embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         print("SentenceTransformer model loaded.")
-        # Initialize FAISS index here now that embedding_model is loaded
         faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
         print(f"FAISS index initialized with dimension {embedding_model.get_sentence_embedding_dimension()}.")
     except Exception as e:
         print(f"Error loading SentenceTransformer model: {e}. Backend cannot function fully.")
-        # Potentially raise an error or set a flag indicating critical failure
+        BACKEND_INITIAL_LOAD_MSG = "Critical: Embedding model failed. Backend non-functional."
+        return # Stop further initialization if embedding model fails
 
-    # Initialize DB clients
     initialize_dropbox_client()
     initialize_mongodb_client()
 
-    # Load initial data
-    if embedding_model and faiss_index is not None: # Only load if core components are up
+    if embedding_model and faiss_index is not None:
         BACKEND_INITIAL_LOAD_MSG = load_data_from_selected_db(default_db)
     else:
         BACKEND_INITIAL_LOAD_MSG = "Critical component (embedding model or FAISS) failed to initialize. Data loading skipped."
@@ -591,6 +763,4 @@ def initialize_all_components(default_db="Dropbox"):
     print(f"Backend Initial Load Status: {BACKEND_INITIAL_LOAD_MSG}")
     print("Backend initialization complete.")
 
-# Call initialization when the module is imported.
-# This ensures all global variables like API clients, models, and initial data are ready.
 initialize_all_components()

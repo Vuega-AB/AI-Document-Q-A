@@ -28,31 +28,37 @@ IS_DROPBOX_CONFIGURED_FRONTEND = backend.get_is_dropbox_configured_backend()
 # --- Dash App Initialization ---
 app = dash.Dash(
     __name__,
-    external_stylesheets=[dbc.themes.LUX, dbc.icons.FONT_AWESOME],
+    external_stylesheets=[
+        dbc.themes.LUX,  # Using LUX as a base
+        dbc.icons.FONT_AWESOME # For icons
+    ],
     suppress_callback_exceptions=True,
     meta_tags=[
         {"name": "viewport", "content": "width=device-width, initial-scale=1"}
     ]
 )
 server = app.server
+app.title = "IntelLaw AI Suite" # MODIFICATION: Set app title
 
 # --- Layout Definition ---
 
-def make_form_group(label_text, component, label_html_for=None, margin_bottom="mb-3"):
+# MODIFICATION: Refined make_form_group for better label styling and default margin
+def make_form_group(label_text, component, label_html_for=None, margin_bottom="mb-4"):
     return dbc.Form([
-        dbc.Label(label_text, html_for=label_html_for, className="fw-semibold small text-muted"),
+        dbc.Label(label_text, html_for=label_html_for, className="form-label small fw-semibold text-muted text-uppercase", style={"letterSpacing": "0.05em"}),
         component
     ], className=margin_bottom)
 
+# MODIFICATION: Enhanced sidebar header
 sidebar_header = dbc.Row(
     dbc.Col(
         html.H4(
             [html.I(className="fas fa-brain me-2"), "IntelLaw AI Suite"],
-            className="text-white my-3 text-center fw-light"
+            className="text-white my-3 text-center fw-bold" # Bolder text
         )
     ),
-    className="bg-primary sticky-top",
-    style={"boxShadow": "0 2px 4px rgba(0,0,0,0.1)"}
+    className="sidebar-header-custom sticky-top", # NEW: Custom class for CSS
+    # Removed inline style, will be handled by CSS for better organization
 )
 
 sidebar_tabs = dbc.Tabs(
@@ -68,8 +74,8 @@ sidebar_tabs = dbc.Tabs(
                         dbc.Col(
                             dcc.Upload(
                                 id='upload-config-json',
-                                children=html.Div([html.I(className="fas fa-upload me-1"), ' Upload JSON']),
-                                style={
+                                children=html.Div([html.I(className="fas fa-upload me-1"), ' Upload JSON Config']), # MODIFICATION: More descriptive text
+                                style={ # Kept original style, CSS will enhance hover on inner div
                                     'width': '100%', 'height': '38px', 'lineHeight': '36px',
                                     'borderWidth': '1px', 'borderStyle': 'dashed',
                                     'borderRadius': '0.25rem', 'textAlign': 'center', 'cursor': 'pointer',
@@ -95,16 +101,17 @@ sidebar_tabs = dbc.Tabs(
                             value=[AVAILABLE_MODELS_OPTIONS_FRONTEND[0]['value']] if AVAILABLE_MODELS_OPTIONS_FRONTEND else []
                         ), label_html_for='model-selector'
                     ),
+                    # MODIFICATION: Improved layout for checkboxes and sliders
                     dbc.Row([
-                        dbc.Col(dbc.Checkbox(id='vary-temp-checkbox', label="Vary Temperature", value=True), width="auto"),
-                        dbc.Col(make_form_group("Base Temp.", dcc.Slider(id='temperature-slider', min=0, max=1, step=0.05, value=0.7, marks=None, tooltip={"placement": "top", "always_visible": False}), margin_bottom="mb-2"))
-                    ]),
+                        dbc.Col(dbc.Checkbox(id='vary-temp-checkbox', label="Vary Temperature", value=True), width="auto", className="pe-2 d-flex align-items-center"),
+                        dbc.Col(make_form_group("Base Temp.", dcc.Slider(id='temperature-slider', min=0, max=1, step=0.05, value=0.7, marks=None, tooltip={"placement": "top", "always_visible": False}), margin_bottom="mb-2", label_html_for="temperature-slider"))
+                    ], className="mb-3 align-items-center"),
                      dbc.Row([
-                        dbc.Col(dbc.Checkbox(id='vary-top-p-checkbox', label="Vary Top-P", value=False), width="auto"),
-                        dbc.Col(make_form_group("Base Top-P", dcc.Slider(id='top-p-slider', min=0, max=1, step=0.05, value=0.9, marks=None, tooltip={"placement": "top", "always_visible": False}), margin_bottom="mb-2"))
-                    ]),
+                        dbc.Col(dbc.Checkbox(id='vary-top-p-checkbox', label="Vary Top-P", value=False), width="auto", className="pe-2 d-flex align-items-center"),
+                        dbc.Col(make_form_group("Base Top-P", dcc.Slider(id='top-p-slider', min=0, max=1, step=0.05, value=0.9, marks=None, tooltip={"placement": "top", "always_visible": False}), margin_bottom="mb-2", label_html_for="top-p-slider"))
+                    ], className="align-items-center"), # No mb-3 here, system prompt follows
                     make_form_group("System Prompt", dbc.Textarea(id='system-prompt-area', value="You are a helpful assistant. Answer questions strictly based on the provided context. If the context is insufficient or irrelevant to the question, state that you don't have enough information to answer based on the documents. Do not use outside knowledge.", rows=6, style={"fontSize": "0.85em"}), margin_bottom="mb-0")
-                ], className="py-3 px-3")
+                ], className="py-3 px-3") # Keep padding as is or adjust
             ],
             label_style={"fontSize": "0.85em", "padding": "0.5rem 0.75rem"},
             active_label_style={"fontWeight": "600"}
@@ -118,7 +125,7 @@ sidebar_tabs = dbc.Tabs(
                     make_form_group("Pagination Format", dbc.Input(id='scrape-pagination-format', placeholder="e.g., ?page= or page/", value="?page="), label_html_for='scrape-pagination-format'),
                     make_form_group("Number of Pages", dbc.Input(id='scrape-num-pages', placeholder="e.g., 3", type="number", value=1, min=1, step=1), label_html_for='scrape-num-pages'),
                     dbc.Button([html.I(className="fas fa-search-location me-2"), "Scrape & Process PDFs"], id='start-scraping-button', color="info", className="w-100 mt-3 btn-sm"),
-                    html.Div(id='scraper-status-output', className="mt-3 p-2 border rounded small", style={'maxHeight': '150px', 'overflowY': 'auto', "backgroundColor": "#f0f0f0"})
+                    html.Div(id='scraper-status-output', className="mt-3 p-2 border rounded small", style={'maxHeight': '150px', 'overflowY': 'auto', "backgroundColor": "#f0f0f0"}) # Consider moving bg color to CSS
                 ], className="py-3 px-3")
             ],
             label_style={"fontSize": "0.85em", "padding": "0.5rem 0.75rem"}, active_label_style={"fontWeight": "600"}
@@ -130,21 +137,21 @@ sidebar_tabs = dbc.Tabs(
                     dcc.Upload(
                         id='upload-pdf-sidebar',
                         children=html.Div([html.I(className="fas fa-file-arrow-up me-2"), 'Upload Local PDF(s)']),
-                        style={
+                        style={ # Kept original style, CSS will enhance hover on inner div
                             'width': '100%', 'height': '60px', 'lineHeight': '58px', 'borderWidth': '1px',
                             'borderStyle': 'dashed', 'borderRadius': '0.25rem', 'textAlign': 'center',
-                            'cursor': 'pointer', 'borderColor': '#ced4da', 'color': '#6c757d', 'backgroundColor': '#f8f9fa'
+                            'cursor': 'pointer', 'borderColor': '#ced4da', 'color': '#6c757d', 'backgroundColor': '#f8f9fa' # MODIFICATION: slightly lighter bg
                         }, multiple=True, className="mb-3"
                     ),
                     html.Div(id='sidebar-upload-status-display', className="mb-3 small", style={'maxHeight': '100px', 'overflowY': 'auto'}),
-                    dbc.Label("Indexed Documents:", className="fw-semibold mb-2 small text-muted"),
-                    dbc.ListGroup(id='stored-files-display-list', flush=True, style={'maxHeight': 'calc(100vh - 500px)', 'overflowY': 'auto'})
+                    dbc.Label("Indexed Documents:", className="form-label small fw-semibold text-muted text-uppercase mb-2", style={"letterSpacing": "0.05em"}), # MODIFICATION: Consistent label style
+                    dbc.ListGroup(id='stored-files-display-list', flush=True, style={'maxHeight': 'calc(100vh - 520px)', 'overflowY': 'auto'}) # MODIFICATION: Adjusted maxHeight slightly
                 ], className="py-3 px-3")
             ],
             label_style={"fontSize": "0.85em", "padding": "0.5rem 0.75rem"}, active_label_style={"fontWeight": "600"}
         ),
     ],
-    className="mb-3 custom-sidebar-tabs"
+    className="mb-3 custom-sidebar-tabs" # This class is targeted in CSS
 )
 
 sidebar_layout = html.Div(
@@ -152,7 +159,7 @@ sidebar_layout = html.Div(
         sidebar_header,
         dbc.Container(
             [
-                make_form_group(
+                make_form_group( # Using the modified make_form_group
                     "Active Database",
                     dbc.RadioItems(
                         id='db-selection-radioitems',
@@ -163,24 +170,27 @@ sidebar_layout = html.Div(
                         value=INITIAL_DB_CHOICE if (INITIAL_DB_CHOICE == "Dropbox" and IS_DROPBOX_CONFIGURED_FRONTEND) or \
                                                   (INITIAL_DB_CHOICE == "MongoDB" and IS_MONGO_CONFIGURED_FRONTEND) else \
                                                   ("Dropbox" if IS_DROPBOX_CONFIGURED_FRONTEND else ("MongoDB" if IS_MONGO_CONFIGURED_FRONTEND else "Dropbox")),
-                        className="mt-1", inputClassName="me-2", labelCheckedClassName="fw-bold text-primary",
+                        className="mt-1 dbc_radio_buttons_row", # NEW: Custom class for styling if needed
+                        inputClassName="me-1", # MODIFICATION: Reduced margin
+                        labelClassName="me-3", # MODIFICATION: Added margin for spacing between options
+                        labelCheckedClassName="fw-bold text-primary",
                         inline=True
                     ),
-                    margin_bottom="mb-3"
+                    margin_bottom="mb-3" # Original margin here
                 ),
-                html.Hr(className="my-2"),
+                html.Hr(className="my-2"), # MODIFICATION: Reduced Hr margin
                 sidebar_tabs,
             ],
             fluid=True,
-            className="p-3 sidebar-content-area"
+            className="p-3 sidebar-content-area" # Class targeted in CSS
         )
     ],
-    style={
+    style={ # These styles are fine for fixed sidebar
         'position': 'fixed', 'top': 0, 'left': 0, 'bottom': 0,
-        'width': '36rem',
+        'width': '36rem', # Consider making this responsive (e.g., 30% or '320px' for smaller screens)
         'boxShadow': '0 4px 12px rgba(0,0,0,0.15)',
         'overflowY': 'auto',
-        'backgroundColor': '#FCFCFC'
+        'backgroundColor': '#FCFCFC' # Very light grey
     },
     className="border-end"
 )
@@ -189,7 +199,8 @@ main_content_layout = html.Div([
     dbc.Container([
         dbc.Row(
             dbc.Col(
-                html.H2([html.I(className="fas fa-comments me-2"), "Document Conversation"], className="my-4 text-center display-6 fw-light text-muted"),
+                # MODIFICATION: Applied custom class for styling, changed weight
+                html.H2([html.I(className="fas fa-comments me-2"), "Document Conversation"], className="my-4 text-center display-6 fw-normal main-content-title"),
             )
         ),
         dbc.Alert(
@@ -199,28 +210,29 @@ main_content_layout = html.Div([
             duration=8000,
             dismissable=True,
             color="primary",
-            className="shadow-sm mb-3"
+            className="shadow-sm mb-4" # MODIFICATION: Increased bottom margin
         ),
         dbc.Card(
             dbc.CardBody(
                 html.Div(
                     id='chat-history-container',
-                    style={'minHeight': 'calc(100vh - 280px)', 'maxHeight': 'calc(100vh - 230px)', 'overflowY': 'auto', 'padding': '20px 15px'}
-                ), className="p-0"
+                    # MODIFICATION: Height and padding will be primarily handled by CSS
+                    style={'overflowY': 'auto'}
+                ), className="p-0" # CardBody padding is 0
             ),
-            className="mb-3 shadow-lg chat-container-card",
-            style={"backgroundColor": "white", "borderRadius":"0.5rem"}
+            className="mb-3 shadow-sm chat-container-card", # MODIFICATION: Softer shadow
+            style={"backgroundColor": "white", "borderRadius":"0.3rem"} # MODIFICATION: Slightly softer radius
         ),
         dbc.Row([
             dbc.Col(
-                dbc.InputGroup([
-                    dbc.Textarea(id='chat-user-input', placeholder="Type your question...", rows=2, className="shadow-sm-inset chat-input-area"),
-                    dbc.Button([html.I(className="fas fa-paper-plane"), ""], id='send-chat-msg-button', color="primary", className="shadow-sm send-button")
-                ]),
+                dbc.InputGroup([ # MODIFICATION: Ensured components are direct children of InputGroup
+                    dbc.Textarea(id='chat-user-input', placeholder="Type your question here...", rows=2, className="chat-input-area"),
+                    dbc.Button([html.I(className="fas fa-paper-plane me-1"), "Send"], id='send-chat-msg-button', color="primary", className="send-button") # MODIFICATION: Added "Send" text and icon margin
+                ], className="chat-input-group"), # NEW: Class for group focus styling
             )
-        ], className="mb-3 align-items-center chat-input-row"),
-    ], fluid=True, className="py-3 px-lg-5 px-md-4 px-sm-3")
-], style={'marginLeft': '36rem', 'padding': '0', 'backgroundColor': '#f4f7f6'})
+        ], className="mb-3 align-items-stretch chat-input-row"), # MODIFICATION: align-items-stretch
+    ], fluid=True, className="py-3 px-lg-5 px-md-4 px-sm-3") # Existing padding is good
+], style={'marginLeft': '36rem', 'padding': '0', 'backgroundColor': '#f8f9fa'}) # MODIFICATION: Updated main bg color
 
 
 app.layout = html.Div([
@@ -237,6 +249,25 @@ app.layout = html.Div([
     main_content_layout
 ])
 
+
+# --- Helper for generating file list items ---
+def create_file_list_item(f_item):
+    # MODIFICATION: New structure for file list items for better layout and styling
+    return dbc.ListGroupItem([
+        dbc.Row([
+            dbc.Col([
+                html.I(className="fas fa-file-pdf me-2 text-danger"),
+                html.Span(f_item["name"], title=f_item["name"], className="text-truncate") # text-truncate for ellipsis
+            ], width=0, className="d-flex align-items-center flex-grow-1 pe-2 text-break"), # flex-grow-1, text-break
+            dbc.Col(
+                dbc.Button(
+                    html.I(className="fas fa-trash-alt"),
+                    id={'type': 'delete-file-btn', 'index': f_item["hash"]},
+                    color="danger", size="sm", outline=True, className="delete-file-button", title="Delete File" # NEW: class for CSS
+                ), width="auto", className="ps-0 d-flex align-items-center" # ensure button aligns well
+            )
+        ], align="center", className="w-100 gx-2") # gx-2 for small gutter
+    ], className="py-2 px-3 file-list-item") # NEW: class for CSS, adjusted padding
 
 # --- Callbacks ---
 @app.callback(
@@ -315,13 +346,17 @@ def update_app_config_from_ui(models, vary_t, temp, vary_p_ui, top_p_val_ui, sys
     
     is_ui_trigger = any(ui_element_id in triggered_input_ids for ui_element_id in ui_inputs)
 
-    if not is_ui_trigger and triggered_input_ids:
+    if not is_ui_trigger and triggered_input_ids: # Check if triggered by something else (e.g. config upload)
         return no_update 
-    if not triggered_input_ids and not callback_context.triggered:
+    if not triggered_input_ids and not callback_context.triggered: # Initial call or no relevant trigger
         return no_update
 
+    # Limit models to 3 selections client-side (though backend might also enforce)
     if models is not None and len(models) > 3:
-        models = models[:3]
+        # This part is tricky with multi-select dropdowns if we want to provide immediate feedback.
+        # For now, we'll just cap it when saving to store. A dbc.Alert could be added.
+        models = models[:3] 
+        # TODO: Consider adding a notification if models are capped.
 
     updated_data = {
         "selected_models": models if models is not None else current_config.get("selected_models", []),
@@ -350,25 +385,8 @@ def switch_database_and_reload(selected_db_val):
 
     status_message = backend.load_data_from_db(selected_db_val)
     files_list_backend = backend.get_stored_files_list_backend()
-    files_list_items_display = []
-    if files_list_backend:
-        for f_item in files_list_backend:
-            files_list_items_display.append(
-                dbc.ListGroupItem(
-                    [
-                        html.Div(
-                            [
-                                html.I(className="fas fa-file-pdf me-2 text-danger"),
-                                html.Span(f_item["name"], title=f_item["name"], style={"flexGrow": 1, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"}),
-                            ], className="d-flex align-items-center"
-                        ),
-                        dbc.Button(html.I(className="fas fa-trash-alt"), id={'type': 'delete-file-btn', 'index': f_item["hash"]}, color="danger", size="sm", outline=True, className="ms-auto", title="Delete File")
-                    ],
-                    className="d-flex justify-content-between align-items-center p-2"
-                )
-            )
-    else:
-        files_list_items_display.append(dbc.ListGroupItem("No files in this database.", className="text-muted"))
+    files_list_items_display = [create_file_list_item(f) for f in files_list_backend] if files_list_backend else \
+                               [dbc.ListGroupItem("No files in this database.", className="text-muted text-center p-3")]
     return selected_db_val, status_message, True, "primary", files_list_items_display
 
 
@@ -386,10 +404,12 @@ def switch_database_and_reload(selected_db_val):
 def handle_sidebar_pdf_upload_files(list_of_contents, list_of_names, selected_db):
     if list_of_contents is None:
         return no_update, no_update, no_update, False, no_update
+    
     upload_alerts = []
     processed_any_new_successfully = False
     main_alert_msg = ""
     main_alert_color = "info"
+
     for content, name in zip(list_of_contents, list_of_names):
         try:
             content_type, content_string = content.split(',')
@@ -398,40 +418,25 @@ def handle_sidebar_pdf_upload_files(list_of_contents, list_of_names, selected_db
             upload_alerts.append(dbc.Alert(status_msg, color="success" if success else "warning", dismissable=True, duration=8000, className="small"))
             if success:
                 processed_any_new_successfully = True
-                main_alert_msg = status_msg
+                main_alert_msg = status_msg # Prioritize success message for main alert
                 main_alert_color = "success"
-            elif not main_alert_msg:
+            elif not main_alert_msg or main_alert_color != "danger": # If no main message yet or current is not error
                 main_alert_msg = status_msg
                 main_alert_color = "warning"
         except Exception as e:
-            upload_alerts.append(dbc.Alert(f"Error processing {name}: {e}", color="danger", dismissable=True, className="small"))
-            if not main_alert_msg:
-                main_alert_msg = f"Error processing {name}: {e}"
-                main_alert_color = "danger"
+            err_msg = f"Error processing {name}: {str(e)}"
+            upload_alerts.append(dbc.Alert(err_msg, color="danger", dismissable=True, className="small"))
+            main_alert_msg = err_msg # Prioritize error message for main alert
+            main_alert_color = "danger"
 
-    if processed_any_new_successfully:
+    files_list_items_display = no_update
+    if processed_any_new_successfully or main_alert_color == "danger": # Refresh list on success or if there was an error (file might have been partially processed or state changed)
         files_list_backend = backend.get_stored_files_list_backend()
-        files_list_items_display = []
-        if files_list_backend:
-            for f_item in files_list_backend:
-                 files_list_items_display.append(
-                    dbc.ListGroupItem(
-                        [
-                            html.Div(
-                                [
-                                    html.I(className="fas fa-file-pdf me-2 text-danger"),
-                                    html.Span(f_item["name"], title=f_item["name"], style={"flexGrow": 1, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"}),
-                                ], className="d-flex align-items-center"
-                            ),
-                            dbc.Button(html.I(className="fas fa-trash-alt"), id={'type': 'delete-file-btn', 'index': f_item["hash"]}, color="danger", size="sm", outline=True, className="ms-auto", title="Delete File")
-                        ],
-                        className="d-flex justify-content-between align-items-center p-2"
-                    )
-                )
-        else:
-            files_list_items_display.append(dbc.ListGroupItem("No files after upload.", className="text-muted"))
-        return upload_alerts, files_list_items_display, main_alert_msg, True, main_alert_color
-    return upload_alerts, no_update, main_alert_msg if main_alert_msg else "No new files processed.", True if main_alert_msg else False, main_alert_color if main_alert_msg else "info"
+        files_list_items_display = [create_file_list_item(f) for f in files_list_backend] if files_list_backend else \
+                                   [dbc.ListGroupItem("No files found after operation.", className="text-muted text-center p-3")]
+
+    final_main_alert_msg = main_alert_msg if main_alert_msg else "File processing complete. Check status messages."
+    return upload_alerts, files_list_items_display, final_main_alert_msg, True, main_alert_color
 
 
 @app.callback(
@@ -451,55 +456,30 @@ def delete_stored_file(n_clicks_list, selected_db_state):
     button_id = ctx.triggered_id
     file_hash_to_delete = button_id['index']
     status_message, success = backend.delete_file_from_store_backend(file_hash_to_delete, selected_db_state)
+    
     files_list_backend = backend.get_stored_files_list_backend()
-    files_list_items_display = []
-    if files_list_backend:
-        for f_item in files_list_backend:
-            files_list_items_display.append(
-                dbc.ListGroupItem(
-                    [
-                        html.Div(
-                            [
-                                html.I(className="fas fa-file-pdf me-2 text-danger"),
-                                html.Span(f_item["name"], title=f_item["name"], style={"flexGrow": 1, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"}),
-                            ], className="d-flex align-items-center"
-                        ),
-                        dbc.Button(html.I(className="fas fa-trash-alt"), id={'type': 'delete-file-btn', 'index': f_item["hash"]}, color="danger", size="sm", outline=True, className="ms-auto", title="Delete File")
-                    ],
-                    className="d-flex justify-content-between align-items-center p-2"
-                )
-            )
-    else:
-        files_list_items_display.append(dbc.ListGroupItem("No files remaining.", className="text-muted"))
+    files_list_items_display = [create_file_list_item(f) for f in files_list_backend] if files_list_backend else \
+                               [dbc.ListGroupItem("No files remaining.", className="text-muted text-center p-3")]
+                               
     return files_list_items_display, status_message, True, "success" if success else "warning"
 
 
 @app.callback(
     Output('stored-files-display-list', 'children', allow_duplicate=True),
-    Input('url', 'pathname'),
-    prevent_initial_call='initial_duplicate'
+    Input('url', 'pathname'), # Initial load trigger
+    # No State needed if INITIAL_DB_CHOICE is correctly loading data at startup
+    prevent_initial_call='initial_duplicate' # Prevents firing before initial data load from DB
 )
-def populate_initial_file_list(_):
+def populate_initial_file_list(_): # pathname is just a trigger
     files_list_backend = backend.get_stored_files_list_backend()
-    files_list_items_display = []
     if files_list_backend:
-        for f_item in files_list_backend:
-            files_list_items_display.append(
-                dbc.ListGroupItem(
-                    [
-                        html.Div(
-                            [
-                                html.I(className="fas fa-file-pdf me-2 text-danger"),
-                                html.Span(f_item["name"], title=f_item["name"], style={"flexGrow": 1, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"}),
-                            ], className="d-flex align-items-center"
-                        ),
-                        dbc.Button(html.I(className="fas fa-trash-alt"), id={'type': 'delete-file-btn', 'index': f_item["hash"]}, color="danger", size="sm", outline=True, className="ms-auto", title="Delete File")
-                    ],
-                    className="d-flex justify-content-between align-items-center p-2"
-                )
-            )
+        files_list_items_display = [create_file_list_item(f) for f in files_list_backend]
     else:
-        files_list_items_display.append(dbc.ListGroupItem("No files found or database not loaded.", className="text-muted"))
+        # Check if a DB is selected, if not, message might differ
+        if INITIAL_DB_CHOICE:
+             files_list_items_display = [dbc.ListGroupItem("No files found in the selected database.", className="text-muted text-center p-3")]
+        else:
+             files_list_items_display = [dbc.ListGroupItem("No database selected or configured. Upload files to begin.", className="text-muted text-center p-3")]
     return files_list_items_display
 
 
@@ -518,7 +498,8 @@ def populate_initial_file_list(_):
 def handle_web_scraping(n_clicks, base_url, endpoint, pagination, num_pages_str, selected_db):
     if n_clicks is None:
         return no_update, no_update, no_update, False, no_update
-    if not all([base_url, endpoint, pagination, num_pages_str]):
+    
+    if not all([base_url, endpoint, pagination, num_pages_str]): # Basic validation
         return [dbc.Alert("All scraper fields are required.", color="warning", className="small")], no_update, no_update, False, no_update
     try:
         num_pages = int(num_pages_str)
@@ -528,31 +509,21 @@ def handle_web_scraping(n_clicks, base_url, endpoint, pagination, num_pages_str,
         return [dbc.Alert("Invalid number for 'Num Pages'.", color="warning", className="small")], no_update, no_update, False, no_update
 
     status_updates_from_backend = backend.run_web_scraping_and_processing_backend(base_url, endpoint, pagination, num_pages, selected_db)
-    scraper_status_display = [html.P(msg, className="mb-1") for msg in status_updates_from_backend]
+    scraper_status_display = [html.P(msg, className="mb-1 small") for msg in status_updates_from_backend] # MODIFICATION: Added small class
+    
     files_list_backend = backend.get_stored_files_list_backend()
-    files_list_items_display = []
-    if files_list_backend:
-        for f_item in files_list_backend:
-             files_list_items_display.append(
-                dbc.ListGroupItem(
-                    [
-                        html.Div(
-                            [
-                                html.I(className="fas fa-file-pdf me-2 text-danger"),
-                                html.Span(f_item["name"], title=f_item["name"], style={"flexGrow": 1, "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap"}),
-                            ], className="d-flex align-items-center"
-                        ),
-                        dbc.Button(html.I(className="fas fa-trash-alt"), id={'type': 'delete-file-btn', 'index': f_item["hash"]}, color="danger", size="sm", outline=True, className="ms-auto", title="Delete File")
-                    ],
-                    className="d-flex justify-content-between align-items-center p-2"
-                )
-            )
-    else:
-        files_list_items_display.append(dbc.ListGroupItem("No files after scraping.", className="text-muted"))
-    main_alert_msg = status_updates_from_backend[-1] if status_updates_from_backend else "Scraping process initiated."
-    main_alert_color = "success" if "finished" in main_alert_msg.lower() and "error" not in main_alert_msg.lower() else "info"
-    if "error" in main_alert_msg.lower() or "fail" in main_alert_msg.lower():
-        main_alert_color = "danger"
+    files_list_items_display = [create_file_list_item(f) for f in files_list_backend] if files_list_backend else \
+                               [dbc.ListGroupItem("No files found after scraping.", className="text-muted text-center p-3")]
+                               
+    main_alert_msg = status_updates_from_backend[-1] if status_updates_from_backend else "Scraping process status unknown."
+    main_alert_color = "info" # Default
+    if status_updates_from_backend:
+        last_msg_lower = status_updates_from_backend[-1].lower()
+        if "error" in last_msg_lower or "fail" in last_msg_lower:
+            main_alert_color = "danger"
+        elif "finish" in last_msg_lower or "complete" in last_msg_lower:
+            main_alert_color = "success"
+
     return scraper_status_display, files_list_items_display, main_alert_msg, True, main_alert_color
 
 
@@ -569,25 +540,30 @@ def handle_web_scraping(n_clicks, base_url, endpoint, pagination, num_pages_str,
 )
 def handle_chat_interaction(n_clicks, user_input_val, current_chat_history_tuples, app_config, selected_db):
     if n_clicks is None or not user_input_val or not user_input_val.strip():
-        return no_update, no_update, no_update
+        return no_update, no_update, no_update # User input is cleared only on successful send
 
-    current_chat_history_tuples.append({"sender": "User", "message": user_input_val})
-    ai_response_list_of_dicts = backend.generate_chat_responses_backend(user_input_val, app_config, selected_db)
+    # Add user message to history
+    current_chat_history_tuples.append({"sender": "User", "message": user_input_val.strip()})
+    
+    # Generate AI response(s)
+    ai_response_list_of_dicts = backend.generate_chat_responses_backend(user_input_val.strip(), app_config, selected_db)
     for resp_data in ai_response_list_of_dicts:
         current_chat_history_tuples.append({
             "sender": "AI", "message": resp_data['response'], "model_info": resp_data['model_info_str']
         })
 
+    # Build chat display elements
     chat_display_elements = []
     for item_idx, item in enumerate(current_chat_history_tuples):
         is_user = item['sender'] == "User"
         
         bubble_specific_class = "user-bubble" if is_user else "ai-bubble"
+        # Use d-flex for alignment, controlling justification from the parent Row
         alignment_class = "justify-content-end" if is_user else "justify-content-start" 
 
         message_card = dbc.Card(
-            dbc.CardBody(html.Pre(item['message'])),
-            className=f"chat-bubble-card {bubble_specific_class}",
+            dbc.CardBody(html.Pre(item['message'])), # Using Pre to respect formatting from AI
+            className=f"chat-bubble-card {bubble_specific_class} shadow-sm", # MODIFICATION: Added shadow-sm
         )
         
         message_block_elements = []
@@ -595,8 +571,8 @@ def handle_chat_interaction(n_clicks, user_input_val, current_chat_history_tuple
         if not is_user and item.get('model_info'):
             message_block_elements.append(
                  html.Div(
-                    html.Small(item['model_info']),
-                    className="model-info-header text-muted mb-1",
+                    html.Small([html.I(className="fas fa-robot me-1 text-muted"), item['model_info']]), # MODIFICATION: Added icon and muted text
+                    className="model-info-header mb-1 ms-1", # MODIFICATION: ms-1 for slight indent
                 )
             )
         
@@ -605,15 +581,17 @@ def handle_chat_interaction(n_clicks, user_input_val, current_chat_history_tuple
         chat_display_elements.append(
             dbc.Row(
                 dbc.Col(
-                    html.Div(message_block_elements, className="d-inline-flex flex-column"),
-                    width="auto",
-                    style={'maxWidth': '80%'} 
+                    html.Div(message_block_elements, className="d-inline-flex flex-column"), # Ensures proper stacking of model_info and card
+                    # MODIFICATION: Using Bootstrap column classes for responsive width
+                    # You can adjust these classes as needed e.g. "col-10 col-md-9 col-lg-8"
+                    className="col-auto", style={'maxWidth': '80%'} # 'col-auto' with maxWidth is often effective
                 ),
-                className=f"d-flex {alignment_class} mb-3",
+                className=f"d-flex {alignment_class} mb-3", # mb-3 provides spacing between messages
             )
         )
-    return chat_display_elements, "", current_chat_history_tuples
+    return chat_display_elements, "", current_chat_history_tuples # Clear input field
 
 
 if __name__ == '__main__':
+    # Consider debug=True for development, False for production
     app.run(debug=False, host='0.0.0.0', port=8050)
