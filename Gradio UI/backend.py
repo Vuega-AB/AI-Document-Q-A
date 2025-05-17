@@ -77,7 +77,7 @@ AVAILABLE_MODELS_NAMES = [details['name'] for details in AVAILABLE_MODELS_DICT.v
 MODEL_NAME_TO_ID_MAP = {details['name']: model_id for model_id, details in AVAILABLE_MODELS_DICT.items()}
 MODEL_ID_TO_NAME_MAP = {v: k for k, v in MODEL_NAME_TO_ID_MAP.items()}
 
-# --- Password Hashing Functions ---
+# --- Password Hashing Functions (existing) ---
 def hash_password(password: str) -> bytes:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
@@ -85,24 +85,32 @@ def verify_password(plain_password: str, hashed_password_bytes: bytes) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password_bytes)
 
 # --- MongoDB User Authentication Functions ---
-def get_auth_db():
+def get_auth_db(): # existing
     global auth_mongo_db_obj, mongo_client_instance
     if auth_mongo_db_obj is None:
         if mongo_client_instance is None:
-            initialize_mongodb_client() # Ensure client is up
-        if mongo_client_instance: # If client init was successful
+            initialize_mongodb_client()
+        if mongo_client_instance:
             auth_mongo_db_obj = mongo_client_instance[MONGO_DB_NAME]
     return auth_mongo_db_obj
 
 def create_admin_user_if_not_exists(email, plain_password, role="admin"):
     db = get_auth_db()
-    # CORRECTED LINE BELOW
     if db is None:
-        print("Error: MongoDB for auth not available. Cannot create admin user.")
+        print("Error: MongoDB for auth not available. Cannot create/update admin user.")
         return False
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    if users_collection.find_one({"email": email}):
+    
+    user = users_collection.find_one({"email": email})
+    if user:
         print(f"User {email} already exists.")
+        # Ensure existing admin is active
+        if user.get("status") != "active" or user.get("role") != "admin":
+            users_collection.update_one(
+                {"email": email},
+                {"$set": {"status": "active", "role": "admin"}}
+            )
+            print(f"Updated user {email} to ensure admin role and active status.")
         return True
     
     hashed_pass = hash_password(plain_password)
@@ -111,17 +119,42 @@ def create_admin_user_if_not_exists(email, plain_password, role="admin"):
             "email": email,
             "password": hashed_pass,
             "role": role,
+            "status": "active",  # Admins are active by default
             "created_at": time.time()
         })
-        print(f"Admin user {email} created successfully.")
+        print(f"Admin user {email} created successfully with active status.")
         return True
     except Exception as e:
         print(f"Error creating admin user {email}: {e}")
         return False
 
-def get_user_by_email(email):
+def create_user(email, plain_password):
+    """Creates a new user with 'pending' status."""
     db = get_auth_db()
-    # CORRECTED LINE BELOW
+    if db is None:
+        return False, "Database error, please try again later."
+    
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    if users_collection.find_one({"email": email}):
+        return False, "Email address already registered."
+    
+    hashed_pass = hash_password(plain_password)
+    try:
+        users_collection.insert_one({
+            "email": email,
+            "password": hashed_pass,
+            "role": "user", # Default role
+            "status": "pending", # New users start as pending
+            "created_at": time.time()
+        })
+        print(f"User {email} registered with pending status.")
+        return True, "Registration successful! Your account is pending admin approval."
+    except Exception as e:
+        print(f"Error creating user {email}: {e}")
+        return False, "An error occurred during registration."
+
+def get_user_by_email(email): # existing
+    db = get_auth_db()
     if db is None:
         print("Error: MongoDB for auth not available. Cannot get user.")
         return None
@@ -608,48 +641,75 @@ def generate_config_for_download_backend(current_app_config_state_dict):
     except Exception as e:
         return None, f"Error generating config file for download: {e}", False
 
-def chat_interface_backend(user_input, chat_history_list, selected_db_state_val, app_config_state_dict):
-    if not user_input or not user_input.strip(): return chat_history_list
-    chat_history_list.append((user_input, None)) 
+# backend.py
+
+# ... (other imports and functions) ...
+
+def chat_interface_backend(user_input, chat_history_list_messages, selected_db_state_val, app_config_state_dict):
+    if not user_input or not user_input.strip():
+        return chat_history_list_messages # Return the list of message dicts
+
+    # Add user's message to history in the new format
+    # chat_history_list_messages is now a list of dicts
+    if chat_history_list_messages is None: # Handle first turn
+        chat_history_list_messages = []
+    chat_history_list_messages.append({"role": "user", "content": user_input})
+
     context_text = retrieve_context_from_db(user_input)
+    
     temp_config = app_config_state_dict['temperature']
     top_p_config = app_config_state_dict['top_p']
     system_prompt_config = app_config_state_dict['system_prompt']
+    
     temp_values_to_run = [temp_config]
     if app_config_state_dict['vary_temperature'] and temp_config > 0.01: 
         temp_values_to_run = sorted(list(set([
             round(max(0.01, temp_config * 0.5), 2), temp_config, 
             round(min(1.0, temp_config * 1.5), 2) if temp_config * 1.5 <=1.0 else temp_config])))
+
     top_p_values_to_run = [top_p_config]
     if app_config_state_dict['vary_top_p'] and top_p_config > 0.01:
         top_p_values_to_run = sorted(list(set([
             round(max(0.01, top_p_config * 0.5), 2), top_p_config,
             round(min(1.0, top_p_config * 1.5),2) if top_p_config * 1.5 <= 1.0 else top_p_config])))
+        
     selected_ai_model_ids = app_config_state_dict.get('selected_models', [])
+    
+    bot_response_content_parts = [] # To accumulate parts of the bot's response
+
     if not selected_ai_model_ids:
         ai_response_text = "System: No AI model selected in configuration."
-        if chat_history_list: chat_history_list[-1] = (user_input, ai_response_text)
+        bot_response_content_parts.append(ai_response_text)
     else:
-        combined_ai_responses_for_chat_display = [] 
         for model_id in selected_ai_model_ids:
             model_detail = AVAILABLE_MODELS_DICT.get(model_id, {})
             model_type = model_detail.get("type")
             model_display_name = model_detail.get("name", model_id)
+
             for temp_val in temp_values_to_run:
                 for top_p_val in top_p_values_to_run:
                     response_content = f"Error generating response for {model_display_name}."
-                    if model_type == "gemini": response_content = generate_response_gemini(user_input, context_text, temp_val, top_p_val, system_prompt_config)
-                    elif model_type == "together": response_content = generate_response_together_ai(user_input, context_text, model_id, temp_val, top_p_val, system_prompt_config)
-                    elif model_type == "openai": response_content = generate_response_openai_api(user_input, context_text, temp_val, top_p_val, system_prompt_config)
+                    if model_type == "gemini":
+                        response_content = generate_response_gemini(user_input, context_text, temp_val, top_p_val, system_prompt_config)
+                    elif model_type == "together":
+                        response_content = generate_response_together_ai(user_input, context_text, model_id, temp_val, top_p_val, system_prompt_config)
+                    elif model_type == "openai":
+                        response_content = generate_response_openai_api(user_input, context_text, temp_val, top_p_val, system_prompt_config)
+                    
                     model_info_str = f"{model_display_name} (T:{temp_val}, P:{top_p_val})"
-                    combined_ai_responses_for_chat_display.append(f"--- {model_info_str} ---\n{response_content}")
+                    bot_response_content_parts.append(f"--- {model_info_str} ---\n{response_content}")
+
                     if not app_config_state_dict['vary_top_p']: break 
                 if not app_config_state_dict['vary_temperature']: break 
-        if combined_ai_responses_for_chat_display and chat_history_list:
-            chat_history_list[-1] = (user_input, "\n\n".join(combined_ai_responses_for_chat_display)) 
-        elif chat_history_list: 
-            chat_history_list[-1] = (user_input, "No responses generated or models configured.")
-    return chat_history_list
+        
+    final_bot_response = "\n\n".join(bot_response_content_parts)
+    if not final_bot_response:
+        final_bot_response = "No responses generated or models configured."
+
+    # Add bot's response to history in the new format
+    chat_history_list_messages.append({"role": "assistant", "content": final_bot_response})
+    
+    return chat_history_list_messages # Return the updated list of message dicts
 
 def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_val):
     if sys.platform == "win32" and isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy):
