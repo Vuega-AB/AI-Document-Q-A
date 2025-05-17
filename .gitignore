@@ -1,3 +1,4 @@
 .env
 rag-deepseek
 
+/Gradio UI/__pycache__
