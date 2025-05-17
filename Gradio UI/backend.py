@@ -25,7 +25,7 @@ from google.api_core import exceptions as google_exceptions
 import dropbox
 import hashlib
 import io
-import tempfile # For config download
+import tempfile 
 
 # --- Environment Variables & Initializations ---
 load_dotenv()
@@ -556,22 +556,22 @@ def delete_files_backend(filenames_to_delete, selected_db):
 
 def apply_uploaded_config_backend(config_file_obj, current_app_config_state_dict):
     if config_file_obj is None:
-        return "No config file uploaded.", current_app_config_state_dict, *[gradio.update()]*6 
+        return "No config file uploaded.", False, current_app_config_state_dict, *[gradio.update()]*6
 
     try:
         with open(config_file_obj.name, 'r') as f:
             new_config = json.load(f)
 
-        # Validate and update - be careful about partial updates or missing keys
-        # For simplicity, direct update. Add validation as needed.
+        # Merge uploaded config into the current state
         current_app_config_state_dict.update(new_config)
         
         # Prepare UI updates based on the new state
+        # Ensure MODEL_ID_TO_NAME_MAP is accessible
         sel_model_ids = current_app_config_state_dict.get("selected_models", [])
         model_names_for_ui = [MODEL_ID_TO_NAME_MAP[mid] for mid in sel_model_ids if mid in MODEL_ID_TO_NAME_MAP]
 
         return (
-            "Configuration loaded successfully from file.",
+            "Configuration loaded successfully from file.", True,
             current_app_config_state_dict, # Return the updated state dict
             gradio.update(value=model_names_for_ui),
             gradio.update(value=current_app_config_state_dict.get("vary_temperature", True)),
@@ -582,34 +582,48 @@ def apply_uploaded_config_backend(config_file_obj, current_app_config_state_dict
         )
     except Exception as e:
         error_msg = f"Error loading config: {e}"
-        # Return error and no change to UI elements (or current state)
-        return error_msg, current_app_config_state_dict, *[gradio.update()]*6
+        return error_msg, False, current_app_config_state_dict, *[gradio.update()]*6
 
 
 def generate_config_for_download_backend(current_app_config_state_dict):
+    """
+    Generates a JSON config file for download containing only temperature, top_p, and system_prompt.
+    """
     try:
-        # Create a temporary file to hold the config
+        # Extract only the desired keys from the app_config_state
+        config_to_download = {
+            "temperature": current_app_config_state_dict.get("temperature", 0.7), # Provide a default if key missing
+            "top_p": current_app_config_state_dict.get("top_p", 0.9),         # Provide a default if key missing
+            "system_prompt": current_app_config_state_dict.get("system_prompt", "You are a helpful assistant.") # Default
+        }
+        
+        # Create a temporary file to hold the config.
         # delete=False is important as Gradio needs the file to exist when it serves it.
-        # Gradio typically cleans up its own temp files.
+        # Gradio's DownloadButton will handle serving this file.
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding='utf-8') as tmp_file:
-            json.dump(current_app_config_state_dict, tmp_file, indent=2)
+            json.dump(config_to_download, tmp_file, indent=2)
             tmp_file_path = tmp_file.name
         
-        # Return the path to the temporary file. Gradio's gr.File output will make it downloadable.
-        return tmp_file_path, "Config file ready for download."
+        # Return the path to the temporary file, a success message, and a success flag.
+        # The DownloadButton component uses the first returned value (the filepath).
+        return tmp_file_path, "Config (temp, top_p, prompt) ready for download.", True
     except Exception as e:
-        return None, f"Error generating config file: {e}"
+        # If there's an error, return None for the filepath, an error message, and a failure flag.
+        return None, f"Error generating config file for download: {e}", False
 
 
-def chat_interface_backend(user_input, chat_history_list, selected_db_state_val, app_config_state_dict): # Use state values directly
+
+def chat_interface_backend(user_input, chat_history_list, selected_db_state_val, app_config_state_dict):
     if not user_input or not user_input.strip():
-        return chat_history_list, "" 
+        # return chat_history_list, "" # OLD: returning empty string for HTML
+        return chat_history_list # NEW: only return chat history
 
     chat_history_list.append((user_input, None)) 
 
-    context_text = retrieve_context_from_db(user_input)
+    context_text = retrieve_context_from_db(user_input) # Assuming this function exists
     
-    model_responses_html = ""
+    # model_responses_html = "" # This variable is no longer needed for output
+
     temp_config = app_config_state_dict['temperature']
     top_p_config = app_config_state_dict['top_p']
     system_prompt_config = app_config_state_dict['system_prompt']
@@ -627,23 +641,23 @@ def chat_interface_backend(user_input, chat_history_list, selected_db_state_val,
             round(min(1.0, top_p_config * 1.5),2) if top_p_config * 1.5 <= 1.0 else top_p_config])))
         
     selected_ai_model_ids = app_config_state_dict.get('selected_models', [])
+    
     if not selected_ai_model_ids:
         ai_response_text = "System: No AI model selected in configuration."
-        model_responses_html = f"<p>{ai_response_text}</p>"
-        # Update chat history with this system message if desired (currently only in HTML)
-        if chat_history_list: # Ensure there's a user query to respond to
+        # model_responses_html = f"<p>{ai_response_text}</p>" # No longer needed
+        if chat_history_list:
              chat_history_list[-1] = (user_input, ai_response_text)
-
     else:
         combined_ai_responses_for_chat_display = [] 
         for model_id in selected_ai_model_ids:
-            model_detail = AVAILABLE_MODELS_DICT.get(model_id, {})
+            model_detail = AVAILABLE_MODELS_DICT.get(model_id, {}) # Assuming AVAILABLE_MODELS_DICT is defined
             model_type = model_detail.get("type")
             model_display_name = model_detail.get("name", model_id)
 
             for temp_val in temp_values_to_run:
                 for top_p_val in top_p_values_to_run:
                     response_content = f"Error generating response for {model_display_name}."
+                    # Call your response generation functions (generate_response_gemini, etc.)
                     if model_type == "gemini":
                         response_content = generate_response_gemini(user_input, context_text, temp_val, top_p_val, system_prompt_config)
                     elif model_type == "together":
@@ -653,7 +667,7 @@ def chat_interface_backend(user_input, chat_history_list, selected_db_state_val,
                     
                     model_info_str = f"{model_display_name} (T:{temp_val}, P:{top_p_val})"
                     combined_ai_responses_for_chat_display.append(f"--- {model_info_str} ---\n{response_content}")
-                    model_responses_html += f"<div><h4>{model_info_str}</h4><pre style='white-space: pre-wrap; word-break: break-word;'>{response_content}</pre><hr/></div>"
+                    # model_responses_html += f"<div><h4>{model_info_str}</h4><pre style='white-space: pre-wrap; word-break: break-word;'>{response_content}</pre><hr/></div>" # No longer needed
 
                     if not app_config_state_dict['vary_top_p']: break 
                 if not app_config_state_dict['vary_temperature']: break 
@@ -663,8 +677,8 @@ def chat_interface_backend(user_input, chat_history_list, selected_db_state_val,
         elif chat_history_list: 
             chat_history_list[-1] = (user_input, "No responses generated or models configured.")
 
-    return chat_history_list, model_responses_html
-
+    # return chat_history_list, model_responses_html # OLD
+    return chat_history_list # NEW: only return chat history
 
 def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_val):
     if sys.platform == "win32" and isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy):

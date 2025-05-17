@@ -1,140 +1,45 @@
 import gradio as gr
-import os
-import sys
-import asyncio
 
-# Assuming your backend logic is in backend.py
 from backend import (
-    get_current_file_list_md_backend, # For initial load
-    get_unique_filenames_from_text_store, # For initial choices in checkbox
-    update_app_config_backend,
+    get_current_file_list_md_backend,
+    get_unique_filenames_from_text_store,
     switch_db_backend,
     handle_pdf_upload_backend,
-    chat_interface_backend,
+    chat_interface_backend, 
     run_scraper_backend,
     delete_files_backend,
     apply_uploaded_config_backend,
     generate_config_for_download_backend,
     AVAILABLE_MODELS_NAMES,
     MODEL_NAME_TO_ID_MAP,
-    BACKEND_INITIAL_LOAD_MSG
+    BACKEND_INITIAL_LOAD_MSG,
 )
 
-# Custom CSS for styling and responsiveness
+# Custom CSS (remains the same)
 CUSTOM_CSS = """
 /* Global background */
-body, .gradio-container { background-color: #f0f4f8 !important; } /* Ensure body and container get the color */
-
-/* Main layout styling */
-.gradio-container { font-family: 'Inter', sans-serif; } /* Example: Using a nice sans-serif font */
-
-/* Controls Column Styling */
-.controls-column .gr-panel { /* Target panels within the controls column if needed */
-    /* background-color: #ffffff; */ /* Example: if you want a different bg for panels */
-    /* border-radius: 1rem; */
-    /* box-shadow: 0 4px 12px rgba(0,0,0,0.05); */
-}
-
-/* Chat bubbles styling */
-.gradio-chatbot .message.bot {
-    background-color: #2563eb !important; /* Slightly adjusted blue */
-    color: #ffffff !important;
-    border-radius: 1rem 0.25rem 1rem 1rem !important; /* Asymmetric rounding for bot */
-    padding: 0.75rem 1rem !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-    max-width: 80% !important;
-    align-self: flex-start !important; /* Explicitly align left */
-    margin-left: 0.5rem;
-    margin-right: auto;
-}
-.gradio-chatbot .message.user {
-    background-color: #e0f2fe !important; /* Lighter blue for user */
-    color: #0c4a6e !important; /* Darker text for contrast */
-    border-radius: 0.25rem 1rem 1rem 1rem !important; /* Asymmetric rounding for user */
-    padding: 0.75rem 1rem !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-    max-width: 80% !important;
-    align-self: flex-end !important; /* Explicitly align right */
-    margin-right: 0.5rem;
-    margin-left: auto;
-}
-
-/* Chat container padding and message spacing */
-.gradio-chatbot .messages {
-    padding: 1rem !important;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem; /* Space between messages */
-}
-
-/* Chat Input Area */
-#chat-input-container {
-    margin-top: 1rem;
-    padding: 0.5rem;
-    /* background-color: #ffffff; */ /* Optional: if you want a distinct bg for input bar */
-    /* border-radius: 1rem; */
-    /* box-shadow: 0 -2px 8px rgba(0,0,0,0.05); */ /* Subtle top shadow */
-}
-#chat-input-container textarea {
-    border-radius: 0.75rem !important; /* Rounded corners for textbox */
-    border: 1px solid #cbd5e1 !important; /* Subtle border */
-    padding: 0.75rem !important;
-}
-#chat-input-container button { /* Style the send button specifically if needed */
-    height: 100%; /* Make button same height as textbox */
-}
-
-
-/* Slider bar size - adjust if too chunky */
-.gr-slider .track, .gr-slider .thumb {
-    height: 1rem !important; /* Reduced slightly */
-}
-.gr-slider .thumb {
-    width: 1rem !important; /* Ensure thumb is proportional */
-}
-
-/* Responsive layout for small screens */
-@media (max-width: 768px) {
-  .gr-row {
-    flex-direction: column !important;
-  }
-  .controls-column { /* Ensure controls column takes full width on small screens */
-    min-width: 100% !important;
-  }
-  .gradio-chatbot .message.bot, .gradio-chatbot .message.user {
-    max-width: 90% !important; /* Allow slightly wider bubbles on mobile */
-  }
-}
-
-/* General Button rounding and font */
-.gr-button {
-    border-radius: 0.75rem !important;
-    font-weight: 500 !important;
-    padding: 0.6rem 1.2rem !important; /* Adjust padding for better feel */
-}
-.gr-button.gr-button-primary { /* Primary button specific styling */
-    background-color: #1d4ed8 !important; /* Ensure primary color from theme is strong */
-    color: white !important;
-}
-.gr-button.stop { /* Styling for delete/stop buttons */
-    background-color: #dc2626 !important; /* Red color */
-    color: white !important;
-}
-
-
-/* Accordion and Tabs styling for clarity */
-.gr-accordion .gr-button { /* Accordion header */
-    /* background-color: #eef2ff !important; */
-    /* border-radius: 0.5rem !important; */
-}
-.gr-tabs .gr-button { /* Tab buttons */
-    /* border-bottom: 2px solid transparent !important; */
-}
-.gr-tabs .gr-button.selected {
-    /* border-bottom-color: #1d4ed8 !important; */ /* Highlight selected tab */
-    /* color: #1d4ed8 !important; */
-}
+body, .gradio-container { background-color: #f0f4f8 !important; }
+.gradio-container { font-family: 'Inter', sans-serif; }
+.gradio-chatbot .message.bot { background-color: #2563eb !important; color: #ffffff !important; border-radius: 1rem 0.25rem 1rem 1rem !important; padding: 0.75rem 1rem !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important; max-width: 80% !important; align-self: flex-start !important; margin-left: 0.5rem; margin-right: auto; }
+.gradio-chatbot .message.user { background-color: #e0f2fe !important; color: #0c4a6e !important; border-radius: 0.25rem 1rem 1rem 1rem !important; padding: 0.75rem 1rem !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important; max-width: 80% !important; align-self: flex-end !important; margin-right: 0.5rem; margin-left: auto; }
+.gradio-chatbot .messages { padding: 1rem !important; display: flex; flex-direction: column; gap: 0.75rem; }
+#chat-input-container textarea { border-radius: 0.75rem !important; border: 1px solid #cbd5e1 !important; padding: 0.75rem !important; }
+#chat-input-container button { height: 100%; }
+.gr-slider .track, .gr-slider .thumb { height: 1rem !important; }
+.gr-slider .thumb { width: 1rem !important; }
+@media (max-width: 768px) { .gr-row { flex-direction: column !important; } .controls-column { min-width: 100% !important; } .gradio-chatbot .message.bot, .gradio-chatbot .message.user { max-width: 90% !important; } }
+.gr-button { border-radius: 0.75rem !important; font-weight: 500 !important; padding: 0.6rem 1.2rem !important; }
+.gr-button.gr-button-primary { background-color: #1d4ed8 !important; color: white !important; }
+.gr-button.stop { background-color: #dc2626 !important; color: white !important; }
 """
+
+# Helper function to show popups
+def _show_status_popup(message, is_success):
+    if message:
+        if is_success:
+            gr.Info(message)
+        else:
+            gr.Warning(message)
 
 with gr.Blocks(
     css=CUSTOM_CSS,
@@ -145,10 +50,9 @@ with gr.Blocks(
     ),
     title="IntelLaw Gradio"
 ) as demo:
-    # --- State Variables ---
     selected_db_state = gr.State(value="Dropbox")
     initial_selected_model_id = []
-    if AVAILABLE_MODELS_NAMES:
+    if AVAILABLE_MODELS_NAMES and MODEL_NAME_TO_ID_MAP:
         first_model_name = AVAILABLE_MODELS_NAMES[0]
         if first_model_name in MODEL_NAME_TO_ID_MAP:
             initial_selected_model_id = [MODEL_NAME_TO_ID_MAP[first_model_name]]
@@ -164,91 +68,60 @@ with gr.Blocks(
     }
     app_config_state = gr.State(value=app_config_state_dict)
 
+    status_msg_for_popup = gr.State()
+    success_flag_for_popup = gr.State()
 
-    # --- Header ---
     gr.Markdown("# 📄 IntelLaw - Chat with Documents")
 
-    # --- Layout ---
     with gr.Row(equal_height=False):
         with gr.Column(scale=2, min_width=420, elem_classes=["controls-column"]):
             gr.Markdown("### 🛠️ Controls")
             with gr.Accordion("Database Backend", open=True):
-                db_radio = gr.Radio(
-                    label="Choose Database", choices=["Dropbox", "MongoDB"], value="Dropbox"
-                )
+                db_radio = gr.Radio(label="Choose Database", choices=["Dropbox", "MongoDB"], value=selected_db_state.value)
                 db_status = gr.Textbox(label="DB Status", interactive=False, value=BACKEND_INITIAL_LOAD_MSG)
 
             with gr.Tabs():
                 with gr.TabItem("🧠 Config"):
                     model_selector = gr.Dropdown(
                         label="AI Models (Max 3)", choices=AVAILABLE_MODELS_NAMES,
-                        value=[AVAILABLE_MODELS_NAMES[0]] if AVAILABLE_MODELS_NAMES else [],
-                        multiselect=True, max_choices=3
+                        value=[AVAILABLE_MODELS_NAMES[0]] if AVAILABLE_MODELS_NAMES and AVAILABLE_MODELS_NAMES[0] in MODEL_NAME_TO_ID_MAP else [],
+                        multiselect=True, max_choices=3, interactive=True
                     )
-                    vary_temp = gr.Checkbox(label="Vary Temperature", value=app_config_state.value["vary_temperature"])
-                    temp_slider = gr.Slider(label="Temperature", minimum=0.0, maximum=1.0, step=0.01, value=app_config_state.value["temperature"])
-                    vary_top_p = gr.Checkbox(label="Vary Top-P", value=app_config_state.value["vary_top_p"])
-                    top_p_slider = gr.Slider(label="Top-P", minimum=0.0, maximum=1.0, step=0.01, value=app_config_state.value["top_p"])
-                    system_prompt = gr.Textbox(label="System Prompt", lines=4, value=app_config_state.value["system_prompt"])
-                    update_config_button = gr.Button("Update Config", variant="secondary")
-                    config_status = gr.Textbox(label="Config Status", interactive=False)
+                    vary_temp = gr.Checkbox(label="Vary Temperature", value=app_config_state.value["vary_temperature"], interactive=True)
+                    temp_slider = gr.Slider(label="Temperature", minimum=0.0, maximum=1.0, step=0.01, value=app_config_state.value["temperature"], interactive=True)
+                    vary_top_p = gr.Checkbox(label="Vary Top-P", value=app_config_state.value["vary_top_p"], interactive=True)
+                    top_p_slider = gr.Slider(label="Top-P", minimum=0.0, maximum=1.0, step=0.01, value=app_config_state.value["top_p"], interactive=True)
+                    system_prompt = gr.Textbox(label="System Prompt", lines=4, value=app_config_state.value["system_prompt"], interactive=True)
                     
                     gr.Markdown("---")
                     gr.Markdown("#### Configuration File Management")
-                    config_file_uploader = gr.File(label="Upload Config (JSON)", type="filepath", file_types=[".json"])
-                    load_config_button = gr.Button("Apply Uploaded Config")
-                    download_config_button = gr.Button("Download Current Config")
-                    config_file_status = gr.Textbox(label="Config File Status", interactive=False)
-                    # Hidden component for file download
-                    download_config_output_file = gr.File(label="Download Link", interactive=False, visible=False)
-
+                    upload_config_btn = gr.UploadButton("Upload & Apply Config (JSON)", file_types=[".json"])
+                    download_config_btn = gr.DownloadButton("Download Current Config")
 
                 with gr.TabItem("📁 Stored Files"):
                     file_uploader = gr.Files(label="Upload PDFs", file_count="multiple", type="filepath", file_types=[".pdf"])
                     upload_status = gr.Textbox(label="Upload Status", interactive=False, lines=3)
-                    
-                    gr.Markdown("---")
                     initial_filenames = get_unique_filenames_from_text_store()
-                    files_to_delete_checkboxgroup = gr.CheckboxGroup(
-                        label="Select Files to Delete", 
-                        choices=initial_filenames,
-                        value=[]
-                    )
-                    delete_files_button = gr.Button("Delete Selected Files", variant="stop") # "stop" gives red color
+                    files_to_delete_checkboxgroup = gr.CheckboxGroup(label="Select Files to Delete", choices=initial_filenames, value=[])
+                    delete_files_button = gr.Button("Delete Selected Files", variant="stop")
                     delete_status_text = gr.Textbox(label="Deletion Status", interactive=False)
-                    
-                    gr.Markdown("---")
                     stored_files_md = gr.Markdown(value=get_current_file_list_md_backend())
 
-
                 with gr.TabItem("🌐 Web Scraper"):
-                    base_url = gr.Textbox(label="Base URL", value="https://www.imy.se")
-                    listing_endpoint = gr.Textbox(label="Listing Endpoint (e.g., 'tillsyner')", value="tillsyner")
-                    pagination = gr.Textbox(label="Pagination Format (e.g. '?page=')", value="?query=&page=")
-                    pages_to_check = gr.Number(label="Num Pages to Check", value=1, minimum=1, precision=0)
+                    base_url_input = gr.Textbox(label="Base URL", value="https://www.imy.se")
+                    listing_endpoint_input = gr.Textbox(label="Listing Endpoint", value="tillsyner")
+                    pagination_input = gr.Textbox(label="Pagination Format", value="?query=&page=")
+                    pages_to_check_input = gr.Number(label="Num Pages to Check", value=1, minimum=1, precision=0)
                     scrape_btn = gr.Button("Start Scraping & Process", variant="secondary")
                     scraper_output = gr.Textbox(label="Scraper Output", lines=5, max_lines=10, interactive=False)
 
         with gr.Column(scale=3):
             gr.Markdown("### 💬 Chat Interface")
-            chatbot = gr.Chatbot(
-                label="IntelLaw Chatbot",
-                height=600,
-                show_copy_button=True,
-                bubble_full_width=False
-            )
+            chatbot = gr.Chatbot(label="IntelLaw Chatbot", height=600, show_copy_button=True, bubble_full_width=False)
             with gr.Row(elem_id="chat-input-container"):
-                chat_input = gr.Textbox(
-                    show_label=False,
-                    placeholder="Ask anything about the documents...",
-                    scale=5,
-                    container=False
-                )
+                chat_input = gr.Textbox(show_label=False, placeholder="Ask anything about the documents...", scale=5, container=False)
                 send_btn = gr.Button("Send", scale=1, variant="primary")
-
-            gr.Markdown("### 🤖 Model Responses (Details)")
-            responses_html = gr.HTML()
-
+            
     # --- Event Handlers ---
     db_radio.change(
         fn=switch_db_backend,
@@ -256,29 +129,35 @@ with gr.Blocks(
         outputs=[selected_db_state, db_status, files_to_delete_checkboxgroup, stored_files_md]
     )
 
-    update_config_button.click(
-        fn=update_app_config_backend,
-        inputs=[model_selector, vary_temp, temp_slider, vary_top_p, top_p_slider, system_prompt, app_config_state],
-        outputs=[config_status, app_config_state]
-    )
-
-    load_config_button.click(
+    upload_config_btn.upload(
         fn=apply_uploaded_config_backend,
-        inputs=[config_file_uploader, app_config_state],
+        inputs=[upload_config_btn, app_config_state],
         outputs=[
-            config_file_status, app_config_state,
-            model_selector, vary_temp, temp_slider, vary_top_p, top_p_slider, system_prompt
+            status_msg_for_popup, success_flag_for_popup,
+            app_config_state,
+            model_selector, vary_temp, temp_slider,
+            vary_top_p, top_p_slider, system_prompt
         ]
+    ).then(
+        fn=_show_status_popup,
+        inputs=[status_msg_for_popup, success_flag_for_popup],
+        outputs=None
     )
     
-    download_config_button.click(
-        fn=generate_config_for_download_backend,
+
+    def _generate_and_get_path_only(app_config_state_value):
+        filepath, status_msg, success = generate_config_for_download_backend(app_config_state_value)
+        if filepath is None:
+            gr.Warning(status_msg or "Failed to generate file for download.")
+        elif success: # Optionally show success info even in simplified mode
+            gr.Info(status_msg or "File ready for download.")
+        return filepath
+
+    download_config_btn.click(
+        fn=_generate_and_get_path_only,
         inputs=[app_config_state],
-        outputs=[download_config_output_file, config_file_status] # download_config_output_file will trigger download
-    ).then(lambda: gr.update(visible=True), outputs=[download_config_output_file]) # Make it visible to trigger download then hide
-    # Ideally, Gradio would handle the download directly. If not, this makes it visible briefly.
-    # A better approach for download might involve a gr.DownloadButton if available or specific Gradio file handling.
-    # For now, returning a gr.File output usually triggers a download link.
+        outputs=[download_config_btn] # Only output to the button itself
+    )
 
     file_uploader.upload(
         fn=handle_pdf_upload_backend,
@@ -293,32 +172,21 @@ with gr.Blocks(
     )
 
     chat_inputs = [chat_input, chatbot, selected_db_state, app_config_state]
-    chat_outputs = [chatbot, responses_html]
-
+    # MODIFIED: chat_outputs no longer includes responses_html
+    chat_outputs = [chatbot] 
+    
     def clear_input_fn(): return gr.update(value="")
 
-    send_btn.click(
-        fn=chat_interface_backend,
-        inputs=chat_inputs, outputs=chat_outputs
-    ).then(
-        fn=clear_input_fn, outputs=chat_input
-    )
-    chat_input.submit(
-        fn=chat_interface_backend, inputs=chat_inputs, outputs=chat_outputs
-    ).then(
-        fn=clear_input_fn, outputs=chat_input
-    )
+    send_btn.click(fn=chat_interface_backend, inputs=chat_inputs, outputs=chat_outputs).then(fn=clear_input_fn, inputs=None, outputs=chat_input)
+    chat_input.submit(fn=chat_interface_backend, inputs=chat_inputs, outputs=chat_outputs).then(fn=clear_input_fn, inputs=None, outputs=chat_input)
 
     scrape_btn.click(
         fn=run_scraper_backend,
-        inputs=[base_url, listing_endpoint, pagination, pages_to_check, selected_db_state],
+        inputs=[base_url_input, listing_endpoint_input, pagination_input, pages_to_check_input, selected_db_state],
         outputs=[scraper_output, files_to_delete_checkboxgroup, stored_files_md]
     )
 
 if __name__ == '__main__':
-    # To ensure backend initializes before Gradio tries to use its functions for defaults
-    if BACKEND_INITIAL_LOAD_MSG == "Backend not initialized.": # A simple check
-        print("Waiting for backend to complete initial load if it hasn't...")
-        # In a real scenario, you might have a more robust check or event
-    
+    if BACKEND_INITIAL_LOAD_MSG == "Backend not initialized.":
+        print("Backend may not have initialized fully.")
     demo.launch()
