@@ -616,4 +616,4 @@ def handle_chat_interaction(n_clicks, user_input_val, current_chat_history_tuple
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8050)
+    app.run(debug=False, host='0.0.0.0', port=8050)
