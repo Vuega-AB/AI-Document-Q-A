@@ -143,6 +143,15 @@ def js_logout_function():
         return []; 
     }}
     """
+def js_settings_function():
+    flask_logout_url = f"{FLASK_BASE_URL}/settings"
+    return f"""
+    () => {{
+        console.log('Attempting to log out by redirecting top window to: {flask_logout_url}');
+        window.top.location.href = '{flask_logout_url}';
+        return []; 
+    }}
+    """
 
 def _show_status_popup(message, is_success):
     if message:
@@ -167,13 +176,40 @@ def create_gradio_app():
         with gr.Row(elem_id="app-header-row", equal_height=False, variant="compact"):
             with gr.Column(scale=10, min_width=100): 
                 gr.Markdown("# 📄 IntelLaw", elem_id="app-title")
+
             with gr.Column(scale=1, min_width=100, elem_id="button-column-container"): 
                 dummy_output_for_js = gr.Textbox(visible=False, label="Dummy JS Output")
+                settings_btn = gr.Button("Settings", elem_id="settings-btn")
                 sign_out_btn = gr.Button("Sign Out", elem_id="actual-sign-out-btn", scale=0)
 
         sign_out_btn.click(
             fn=None, inputs=None, outputs=[dummy_output_for_js], js=js_logout_function()
         )
+
+        settings_btn.click(
+            fn=None, inputs=None, outputs=[dummy_output_for_js], js=js_settings_function()
+        )
+
+        # You can optionally add JS code to show/hide Settings button based on user role
+        demo.load(
+            fn=lambda: None, inputs=None, outputs=[],
+            js="""
+            () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const role = urlParams.get('user_role') || 'user';
+            const settingsBtn = document.getElementById('settings-btn');
+            if (settingsBtn) {
+                if (role === 'admin') {
+                settingsBtn.style.display = 'inline-block';
+                } else {
+                settingsBtn.style.display = 'none';
+                }
+            }
+            return [];
+            }
+            """
+        )
+
         
         selected_db_state = gr.State(value="Dropbox")
         initial_selected_model_id = []

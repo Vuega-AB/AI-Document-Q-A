@@ -5,7 +5,7 @@ import aiohttp
 import asyncio
 import PyPDF2
 import faiss
-import time
+import time # Make sure time is imported
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from langdetect import detect
@@ -26,16 +26,17 @@ import dropbox
 import hashlib
 import io
 import tempfile
-import bcrypt # Added for password hashing
-import gradio # Added for gr.update (was implicitly needed)
+import bcrypt
+import gradio
+from datetime import datetime # Make sure datetime is imported
 
 # --- Environment Variables & Initializations ---
 load_dotenv()
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-MONGO_URI = os.getenv("MongoDB") # Ensure this is the same as MONGO_URI in .env if you renamed it
+MONGO_URI = os.getenv("MongoDB") 
 if not MONGO_URI:
-    MONGO_URI = os.getenv("MONGO_URI") # Fallback if .env uses MONGO_URI
+    MONGO_URI = os.getenv("MONGO_URI")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DROPBOX_REFRESH_TOKEN = os.getenv("DROPBOX_REFRESH_TOKEN")
@@ -46,10 +47,10 @@ CONFIG_FILENAME = "app_config_main.json"
 INDEX_FILE_DROPBOX = "/faiss_index.index"
 TEXT_FILE_DROPBOX = "/text_store.json"
 TOKEN_FILE = "dropbox_token.json"
-MONGO_DB_NAME = "IntelLawDB_Gradio" # DB for app data
+MONGO_DB_NAME = "IntelLawDB_Gradio"
 FAISS_COLLECTION_NAME = "faiss_index_store"
 TEXT_STORE_COLLECTION_NAME = "text_content_store"
-ADMIN_USERS_COLLECTION_NAME = "admin_users" # Collection for user credentials
+ADMIN_USERS_COLLECTION_NAME = "admin_users" # User credentials and status
 
 # --- Global Variables for Backend State ---
 gemini_model_genai = None
@@ -57,19 +58,19 @@ together_client = None
 openai_client = None
 dbx = None
 mongo_client_instance = None
-mongo_db_obj = None # For app data
-auth_mongo_db_obj = None # Specifically for auth, can be same as mongo_db_obj
+mongo_db_obj = None
+auth_mongo_db_obj = None
 embedding_model = None
 faiss_index = None
 text_store = []
 BACKEND_INITIAL_LOAD_MSG = "Backend not initialized."
 
 AVAILABLE_MODELS_DICT = {
-    "gemini-1.5-flash-latest": {"price": "Custom", "type": "gemini", "name": "Gemini 1.5 Flash"}, # Corrected model name
-    "openai-gpt-4o": {"price": "Custom", "type": "openai", "name": "OpenAI GPT-4o"}, # Assuming gpt-4o, not openai-4o
-    "meta-llama/Llama-3-70B-Instruct-hf": {"price": "$0.90", "type": "together", "name": "Llama3 70B Instruct (HF)"}, # Example, adjust as needed
-    "meta-llama/Llama-3-8B-Instruct-hf": {"price": "$0.20", "type": "together", "name": "Llama3 8B Instruct (HF)"}, # Example
-    "microsoft/WizardLM-2-8x22B": {"price": "$1.80", "type": "together", "name": "WizardLM-2 8x22B"}, # Price updated
+    "gemini-1.5-flash-latest": {"price": "Custom", "type": "gemini", "name": "Gemini 1.5 Flash"},
+    "openai-gpt-4o": {"price": "Custom", "type": "openai", "name": "OpenAI GPT-4o"},
+    "meta-llama/Llama-3-70B-Instruct-hf": {"price": "$0.90", "type": "together", "name": "Llama3 70B Instruct (HF)"},
+    "meta-llama/Llama-3-8B-Instruct-hf": {"price": "$0.20", "type": "together", "name": "Llama3 8B Instruct (HF)"},
+    "microsoft/WizardLM-2-8x22B": {"price": "$1.80", "type": "together", "name": "WizardLM-2 8x22B"},
     "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together", "name": "Mixtral 8x22B Instruct"},
     "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together", "name": "Hermes-2 Mixtral DPO"},
 }
@@ -77,7 +78,7 @@ AVAILABLE_MODELS_NAMES = [details['name'] for details in AVAILABLE_MODELS_DICT.v
 MODEL_NAME_TO_ID_MAP = {details['name']: model_id for model_id, details in AVAILABLE_MODELS_DICT.items()}
 MODEL_ID_TO_NAME_MAP = {v: k for k, v in MODEL_NAME_TO_ID_MAP.items()}
 
-# --- Password Hashing Functions (existing) ---
+# --- Password Hashing Functions ---
 def hash_password(password: str) -> bytes:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
@@ -85,13 +86,14 @@ def verify_password(plain_password: str, hashed_password_bytes: bytes) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password_bytes)
 
 # --- MongoDB User Authentication Functions ---
-def get_auth_db(): # existing
+def get_auth_db():
     global auth_mongo_db_obj, mongo_client_instance
     if auth_mongo_db_obj is None:
         if mongo_client_instance is None:
-            initialize_mongodb_client()
+            initialize_mongodb_client() # Ensures client is initialized
         if mongo_client_instance:
-            auth_mongo_db_obj = mongo_client_instance[MONGO_DB_NAME]
+            # Use the same DB instance for auth, just different collections
+            auth_mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] 
     return auth_mongo_db_obj
 
 def create_admin_user_if_not_exists(email, plain_password, role="admin"):
@@ -104,11 +106,10 @@ def create_admin_user_if_not_exists(email, plain_password, role="admin"):
     user = users_collection.find_one({"email": email})
     if user:
         print(f"User {email} already exists.")
-        # Ensure existing admin is active
         if user.get("status") != "active" or user.get("role") != "admin":
             users_collection.update_one(
                 {"email": email},
-                {"$set": {"status": "active", "role": "admin"}}
+                {"$set": {"status": "active", "role": "admin", "updated_at": time.time()}}
             )
             print(f"Updated user {email} to ensure admin role and active status.")
         return True
@@ -119,8 +120,9 @@ def create_admin_user_if_not_exists(email, plain_password, role="admin"):
             "email": email,
             "password": hashed_pass,
             "role": role,
-            "status": "active",  # Admins are active by default
-            "created_at": time.time()
+            "status": "active",
+            "created_at": time.time(), # Storing as float (Unix timestamp)
+            "updated_at": time.time()
         })
         print(f"Admin user {email} created successfully with active status.")
         return True
@@ -129,7 +131,6 @@ def create_admin_user_if_not_exists(email, plain_password, role="admin"):
         return False
 
 def create_user(email, plain_password):
-    """Creates a new user with 'pending' status."""
     db = get_auth_db()
     if db is None:
         return False, "Database error, please try again later."
@@ -143,9 +144,11 @@ def create_user(email, plain_password):
         users_collection.insert_one({
             "email": email,
             "password": hashed_pass,
-            "role": "user", # Default role
+            "role": "user",
             "status": "pending", # New users start as pending
-            "created_at": time.time()
+            "created_at": time.time(), # Storing as float (Unix timestamp)
+            "updated_at": time.time()
+            # Consider adding 'full_name': email.split('@')[0] here if desired
         })
         print(f"User {email} registered with pending status.")
         return True, "Registration successful! Your account is pending admin approval."
@@ -153,7 +156,7 @@ def create_user(email, plain_password):
         print(f"Error creating user {email}: {e}")
         return False, "An error occurred during registration."
 
-def get_user_by_email(email): # existing
+def get_user_by_email(email):
     db = get_auth_db()
     if db is None:
         print("Error: MongoDB for auth not available. Cannot get user.")
@@ -161,8 +164,83 @@ def get_user_by_email(email): # existing
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
     return users_collection.find_one({"email": email})
 
+def get_all_users_from_db():
+    """Fetches all users from the database for admin display."""
+    db = get_auth_db()
+    if db is None:
+        print("ERROR: MongoDB for auth not available in backend.get_all_users_from_db")
+        return []
+    
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    try:
+        users_cursor = users_collection.find({})
+        users_list = []
+        for user_doc in users_cursor:
+            user_doc['_id'] = str(user_doc['_id'])
+            
+            if 'password' in user_doc: # Never send password hash to frontend
+                del user_doc['password']
+            
+            # Convert 'created_at' from float timestamp to datetime object for consistent processing
+            if 'created_at' in user_doc and isinstance(user_doc['created_at'], (int, float)):
+                user_doc['created_at'] = datetime.fromtimestamp(user_doc['created_at'])
+            
+            # Convert 'updated_at' if it exists and is a float timestamp
+            if 'updated_at' in user_doc and isinstance(user_doc['updated_at'], (int, float)):
+                user_doc['updated_at'] = datetime.fromtimestamp(user_doc['updated_at'])
 
-# --- Dropbox Functions (existing) ---
+            # Convert 'last_login_at' if it exists (assuming it might be stored as float)
+            if 'last_login_at' in user_doc and isinstance(user_doc['last_login_at'], (int, float)):
+                user_doc['last_login_at'] = datetime.fromtimestamp(user_doc['last_login_at'])
+            
+            # Ensure 'full_name' for display, derive from email if not present
+            if 'full_name' not in user_doc and 'email' in user_doc:
+                user_doc['full_name'] = user_doc['email'].split('@')[0]
+            elif 'full_name' not in user_doc:
+                user_doc['full_name'] = "N/A"
+                
+            users_list.append(user_doc)
+        return users_list
+    except Exception as e:
+        print(f"Error fetching all users: {e}")
+        return []
+
+def update_user_status_in_db(user_email, new_status):
+    """Updates the status of a user in the database."""
+    db = get_auth_db()
+    if db is None:
+        print("ERROR: MongoDB for auth not available in backend.update_user_status_in_db")
+        return False, "Database not connected."
+    
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    
+    allowed_statuses = ["active", "pending", "suspended", "deactivated"]
+    if new_status not in allowed_statuses:
+        return False, f"Invalid status '{new_status}'. Allowed statuses are: {', '.join(allowed_statuses)}."
+
+    try:
+        # Use float timestamp for updated_at, consistent with created_at
+        current_time_for_update = time.time() 
+
+        result = users_collection.update_one(
+            {"email": user_email},
+            {"$set": {"status": new_status, "updated_at": current_time_for_update}}
+        )
+        if result.matched_count == 0:
+            return False, f"User with email '{user_email}' not found."
+        if result.modified_count == 0:
+            # Check if the status was already the new_status
+            current_user = users_collection.find_one({"email": user_email})
+            if current_user and current_user.get("status") == new_status:
+                 return True, f"User status for '{user_email}' was already '{new_status}'. No change made but considered success." # Treat as success
+            return False, f"User status for '{user_email}' could not be updated (already '{new_status}' or other issue)."
+        return True, f"User '{user_email}' status updated to '{new_status}'."
+    except Exception as e:
+        print(f"Error updating user status for {user_email}: {e}")
+        return False, "An error occurred while updating user status."
+
+# --- Dropbox Functions ---
+# ... (existing Dropbox functions: load_access_token, save_access_token, get_dropbox_access_token, get_valid_access_token, initialize_dropbox_client) ...
 def load_access_token():
     if os.path.exists(TOKEN_FILE):
         with open(TOKEN_FILE, "r") as file: data = json.load(file); return data.get("access_token"), data.get("expires_at")
@@ -207,30 +285,33 @@ def initialize_dropbox_client():
         print(f"Error connecting to Dropbox: {e}")
         dbx = None
 
-# --- MongoDB Functions (for app data, existing) ---
+# --- MongoDB Functions (for app data) ---
 def initialize_mongodb_client():
     global mongo_client_instance, mongo_db_obj, auth_mongo_db_obj
     if MONGO_URI and mongo_client_instance is None:
         try:
             mongo_client_instance = MongoClient(MONGO_URI, server_api=server_api.ServerApi('1'))
-            mongo_client_instance.admin.command('ping')
-            mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] # For app data
-            auth_mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] # For auth data (same DB, different collection)
-            print("MongoDB client initialized successfully for app and auth data.")
+            mongo_client_instance.admin.command('ping') # Verify connection
+            mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] # For app data (FAISS, text_store)
+            auth_mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] # For auth data (admin_users)
+                                                                  # Using same DB, but conceptually could be different
+            print("MongoDB client initialized successfully.")
         except Exception as e:
             print(f"MongoDB connection failed: {e}")
             mongo_client_instance = None; mongo_db_obj = None; auth_mongo_db_obj = None
     elif not MONGO_URI:
         print("Warning: MONGO_URI not set. MongoDB features disabled.")
-        mongo_client_instance = None; mongo_db_obj = None; auth_mongo_db_obj = None
+    # else:
+        # print("MongoDB client already initialized or MONGO_URI not set.")
 
 
-# --- Data Persistence Functions (existing) ---
+# --- Data Persistence Functions (FAISS, text_store) ---
+# ... (existing: save_data_to_selected_db, load_data_from_selected_db) ...
 def save_data_to_selected_db(selected_db):
     global faiss_index, text_store, dbx, mongo_db_obj
 
     if selected_db == "Dropbox" and dbx is None: initialize_dropbox_client()
-    if selected_db == "MongoDB" and mongo_db_obj is None: initialize_mongodb_client() # ensure app data DB obj
+    if selected_db == "MongoDB" and mongo_db_obj is None: initialize_mongodb_client() 
 
     index_to_save = faiss_index
     if index_to_save is None or embedding_model is None:
@@ -244,7 +325,6 @@ def save_data_to_selected_db(selected_db):
     if selected_db == "Dropbox":
         if dbx is None: print("Dropbox not initialized for saving."); return
         try:
-            # Ensure index_to_save is not empty before writing
             if index_to_save.ntotal == 0:
                 print("Skipping FAISS index save to Dropbox as it's empty.")
             else:
@@ -260,10 +340,8 @@ def save_data_to_selected_db(selected_db):
     elif selected_db == "MongoDB":
         if mongo_db_obj is None: print("MongoDB not initialized for saving app data."); return
         try:
-            # Ensure index_to_save is not empty before writing
             if index_to_save.ntotal == 0:
                  print("Skipping FAISS index save to MongoDB as it's empty.")
-                 # Optionally, remove existing index if it should be cleared
                  mongo_db_obj[FAISS_COLLECTION_NAME].delete_one({"_id": "main_faiss_index"})
             else:
                 temp_idx_file = "temp_faiss_to_mongo.idx"
@@ -312,7 +390,7 @@ def load_data_from_selected_db(selected_db):
         except Exception as e: alert_msg += f"Error loading from Dropbox: {e}"
 
     elif selected_db == "MongoDB":
-        if mongo_db_obj is None: initialize_mongodb_client() # Ensure app data DB obj
+        if mongo_db_obj is None: initialize_mongodb_client() 
         if mongo_db_obj is None: alert_msg = "MongoDB not initialized for app data. Cannot load."; return alert_msg
         try:
             index_doc = mongo_db_obj[FAISS_COLLECTION_NAME].find_one({"_id": "main_faiss_index"})
@@ -329,20 +407,22 @@ def load_data_from_selected_db(selected_db):
             text_docs = list(mongo_db_obj[TEXT_STORE_COLLECTION_NAME].find({}))
             text_store = [{k: v for k, v in doc.items() if k != '_id'} for doc in text_docs]
             alert_msg += f"Data loaded from MongoDB. {len(text_store)} text items, index has {faiss_index.ntotal} vectors."
-            if not index_doc and not text_docs and not alert_msg:
+            if not index_doc and not text_docs and not alert_msg: # if no error, and no data
                 alert_msg = "No existing data on MongoDB. Initialized empty store."
         except Exception as e: alert_msg += f"Error loading from MongoDB: {e}"
     
     if faiss_index.ntotal > 0 and not text_store:
         alert_msg += " Warning: Index has vectors but text store is empty. Data might be corrupt. Clearing index."
         faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
-    elif not faiss_index.ntotal and text_store:
+    elif not faiss_index.ntotal and text_store: # Index empty but text_store has data
         alert_msg += " Warning: Text store loaded but index is empty/failed to load. Consider re-indexing or checking data integrity."
+
 
     print(f"Load attempt for {selected_db}: {alert_msg}")
     return alert_msg if alert_msg else "Data loaded successfully. Store might be empty."
 
-# --- PDF Processing (existing) ---
+# --- PDF Processing ---
+# ... (existing: chunk_text, extract_text_from_pdf_bytes, process_and_add_pdf_core) ...
 def chunk_text(text, chunk_size=400, min_chunk_length=20):
     paragraphs = re.split(r'\n{2,}', text); chunks = []
     for para in paragraphs:
@@ -391,7 +471,8 @@ def process_and_add_pdf_core(pdf_bytes, file_name, selected_db):
         text_store.append({"text": chunk_text_content, "file_name": file_name, "file_hash": file_hash})
     return f"Processed and added '{file_name}'. Chunks: {len(chunks)}, Index size: {faiss_index.ntotal}", True
 
-# --- AI Response Generation (existing) ---
+# --- AI Response Generation ---
+# ... (existing: generate_response_gemini, generate_response_together_ai, generate_response_openai_api) ...
 def generate_response_gemini(prompt, context, temp, top_p, system_prompt):
     if not gemini_model_genai: return "Gemini client not initialized."
     input_parts = [system_prompt + "\nContext: " + context, "Question: " + prompt]
@@ -409,7 +490,7 @@ def generate_response_together_ai(prompt, context, model_id, temp, top_p, system
         return response.choices[0].message.content.strip()
     except Exception as e: return f"TogetherAI Error ({model_id}): {e}"
 
-def generate_response_openai_api(prompt, context, temp, top_p, system_prompt): # Model name corrected to gpt-4o
+def generate_response_openai_api(prompt, context, temp, top_p, system_prompt): 
     if not openai_client: return "OpenAI client not initialized."
     try:
         response = openai_client.chat.completions.create(
@@ -419,7 +500,8 @@ def generate_response_openai_api(prompt, context, temp, top_p, system_prompt): #
         return response.choices[0].message.content
     except Exception as e: return f"OpenAI Error: {e}"
 
-# --- RAG (existing) ---
+# --- RAG ---
+# ... (existing: retrieve_context_from_db) ...
 def retrieve_context_from_db(query, top_k=5):
     global text_store, faiss_index, embedding_model
     if embedding_model is None: return "Embedding model not initialized for RAG."
@@ -437,7 +519,9 @@ def retrieve_context_from_db(query, top_k=5):
     retrieved_texts = [text_store[idx]["text"] for idx in valid_indices if isinstance(text_store[idx], dict) and "text" in text_store[idx]]
     return "\n\n".join(retrieved_texts) if retrieved_texts else "No relevant context found."
 
-# --- Web Scraping (existing, with minor fixes for async event loop policy on Windows if needed) ---
+
+# --- Web Scraping ---
+# ... (existing web scraping functions) ...
 async def fetch_page_async(url):
     async with httpx.AsyncClient() as client:
         response = await client.get(url, timeout=30.0, follow_redirects=True)
@@ -509,7 +593,8 @@ def get_all_page_urls_for_scraping(base_url_val, listing_endpoint_val, paginatio
              break
     return list(all_page_urls_to_scrape)
 
-# --- UI Callable Backend Functions (existing, ensure `gradio` is imported if not already) ---
+# --- UI Callable Backend Functions ---
+# ... (existing: get_unique_filenames_from_text_store, _build_file_list_updates, etc.) ...
 def get_unique_filenames_from_text_store():
     global text_store
     if not text_store: return []
@@ -629,29 +714,26 @@ def apply_uploaded_config_backend(config_file_obj, current_app_config_state_dict
 
 def generate_config_for_download_backend(current_app_config_state_dict):
     try:
-        config_to_download = {
+        config_to_download = { # Only saving a subset, not the full model list.
+            "vary_temperature": current_app_config_state_dict.get("vary_temperature", True),
             "temperature": current_app_config_state_dict.get("temperature", 0.7),
+            "vary_top_p": current_app_config_state_dict.get("vary_top_p", False),
             "top_p": current_app_config_state_dict.get("top_p", 0.9),
-            "system_prompt": current_app_config_state_dict.get("system_prompt", "You are a helpful assistant.")
+            "system_prompt": current_app_config_state_dict.get("system_prompt", "You are a helpful assistant."),
+            "selected_models": current_app_config_state_dict.get("selected_models", []) # Saving selected model IDs
         }
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding='utf-8') as tmp_file:
             json.dump(config_to_download, tmp_file, indent=2)
             tmp_file_path = tmp_file.name
-        return tmp_file_path, "Config (temp, top_p, prompt) ready for download.", True
+        return tmp_file_path, "Config ready for download.", True
     except Exception as e:
         return None, f"Error generating config file for download: {e}", False
 
-# backend.py
-
-# ... (other imports and functions) ...
-
 def chat_interface_backend(user_input, chat_history_list_messages, selected_db_state_val, app_config_state_dict):
     if not user_input or not user_input.strip():
-        return chat_history_list_messages # Return the list of message dicts
+        return chat_history_list_messages 
 
-    # Add user's message to history in the new format
-    # chat_history_list_messages is now a list of dicts
-    if chat_history_list_messages is None: # Handle first turn
+    if chat_history_list_messages is None: 
         chat_history_list_messages = []
     chat_history_list_messages.append({"role": "user", "content": user_input})
 
@@ -675,7 +757,7 @@ def chat_interface_backend(user_input, chat_history_list_messages, selected_db_s
         
     selected_ai_model_ids = app_config_state_dict.get('selected_models', [])
     
-    bot_response_content_parts = [] # To accumulate parts of the bot's response
+    bot_response_content_parts = [] 
 
     if not selected_ai_model_ids:
         ai_response_text = "System: No AI model selected in configuration."
@@ -706,10 +788,8 @@ def chat_interface_backend(user_input, chat_history_list_messages, selected_db_s
     if not final_bot_response:
         final_bot_response = "No responses generated or models configured."
 
-    # Add bot's response to history in the new format
     chat_history_list_messages.append({"role": "assistant", "content": final_bot_response})
-    
-    return chat_history_list_messages # Return the updated list of message dicts
+    return chat_history_list_messages
 
 def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_val):
     if sys.platform == "win32" and isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy):
@@ -735,14 +815,14 @@ def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_v
     cb_update, md_update = _build_file_list_updates()
     return "\n".join(status_updates), cb_update, md_update
 
-# --- Backend Initialization (called once from main_flask_app.py) ---
+
+# --- Backend Initialization ---
 def initialize_all_components(default_db="Dropbox"):
     global gemini_model_genai, together_client, openai_client, embedding_model, faiss_index, BACKEND_INITIAL_LOAD_MSG, mongo_client_instance, mongo_db_obj, auth_mongo_db_obj
 
     print("Initializing backend components...")
     
-    # Initialize MongoDB first as other components might need it for config or state
-    if mongo_client_instance is None: # Avoid re-initializing if already done
+    if mongo_client_instance is None:
         initialize_mongodb_client()
 
     if GOOGLE_API_KEY:
@@ -772,20 +852,17 @@ def initialize_all_components(default_db="Dropbox"):
     try:
         embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         print("SentenceTransformer model loaded.")
-        # FAISS index initialization is now handled by load_data_from_selected_db or when first needed
     except Exception as e:
         print(f"Error loading SentenceTransformer model: {e}. Backend cannot function fully.")
         BACKEND_INITIAL_LOAD_MSG = "Critical: Embedding model failed. Backend non-functional."
-        return
+        return # Cannot proceed without embedding model
 
-    initialize_dropbox_client() # Initializes dbx
+    initialize_dropbox_client()
 
-    if embedding_model: # FAISS index needs embedding model to know dimension
+    if embedding_model:
         BACKEND_INITIAL_LOAD_MSG = load_data_from_selected_db(default_db)
-    else:
-        BACKEND_INITIAL_LOAD_MSG = "Critical component (embedding model) failed to initialize. Data loading skipped."
+    else: # Should not happen due to return above, but as a safeguard
+        BACKEND_INITIAL_LOAD_MSG = "Critical component (embedding model) failed. Data loading skipped."
     
     print(f"Backend Initial Load Status: {BACKEND_INITIAL_LOAD_MSG}")
     print("Backend initialization complete.")
-
-# No direct call to initialize_all_components() here. It will be called by main_flask_app.py
