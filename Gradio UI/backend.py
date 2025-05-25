@@ -729,41 +729,87 @@ def generate_config_for_download_backend(current_app_config_state_dict):
     except Exception as e:
         return None, f"Error generating config file for download: {e}", False
 
-def chat_interface_backend(user_input, chat_history_list_messages, selected_db_state_val, app_config_state_dict):
+# In your backend.py file:
+
+# Make sure these are imported if not already
+# from typing import List, Tuple, Optional, Dict (adjust as needed for your type hints)
+
+# --- In your backend.py file ---
+
+# Make sure these are imported if not already (or similar if you use more specific types)
+# from typing import List, Optional, Dict
+
+# You'll need to ensure these global variables are accessible if used within the function,
+# or pass them as part of app_config_state_dict or similar.
+# For example: AVAILABLE_MODELS_DICT, gemini_model_genai, together_client, openai_client
+# And ensure your response generation functions like generate_response_gemini, retrieve_context_from_db etc., are defined.
+
+
+def chat_interface_backend(
+    user_input: str,
+    chat_history: list[list[str | None]] | None,  # Gradio passes history like this, can be None initially
+    selected_db_state_val: str,
+    app_config_state_dict: dict
+) -> list[list[str | None]]:  # Must return history in this format
+
     if not user_input or not user_input.strip():
-        return chat_history_list_messages 
+        return chat_history if chat_history is not None else []
 
-    if chat_history_list_messages is None: 
-        chat_history_list_messages = []
-    chat_history_list_messages.append({"role": "user", "content": user_input})
+    # Initialize history as an empty list if it's None
+    current_chat_history = chat_history if chat_history is not None else []
 
-    context_text = retrieve_context_from_db(user_input)
+    # --------------------------------------------------------------------
+    # YOUR LOGIC TO GENERATE `final_bot_response` BASED ON `user_input`
+    # AND `app_config_state_dict` GOES HERE.
+    # This part must result in a single string: `final_bot_response`.
+    #
+    # Example structure (replace with your actual logic):
+    #
+    # context_text = retrieve_context_from_db(user_input, ...)
+    # selected_model_ids = app_config_state_dict.get('selected_models', [])
+    # if not selected_model_ids:
+    #     final_bot_response = "No AI model selected. Please configure one."
+    # else:
+    #     responses = []
+    #     for model_id in selected_model_ids:
+    #         # ... (get model_type, temp, top_p, system_prompt from app_config_state_dict)
+    #         if model_type == "gemini":
+    #             # response_part = generate_response_gemini(...)
+    #             pass # Placeholder
+    #         # ... other model types
+    #         # responses.append(f"Model {model_id}: {response_part}")
+    #     # final_bot_response = "\n\n".join(responses)
+    #     # For simplicity in this example, let's assume a single response for now
+    #     final_bot_response = f"Bot responding to: {user_input} using {selected_model_ids[0] if selected_model_ids else 'default model'}"
+    #
+    # --- Replace above placeholder with your actual response generation ---
+    context_text = retrieve_context_from_db(user_input, top_k=app_config_state_dict.get("top_k_retrieval", 5))
     
-    temp_config = app_config_state_dict['temperature']
-    top_p_config = app_config_state_dict['top_p']
-    system_prompt_config = app_config_state_dict['system_prompt']
+    temp_config = app_config_state_dict.get('temperature', 0.7)
+    top_p_config = app_config_state_dict.get('top_p', 0.9)
+    system_prompt_config = app_config_state_dict.get('system_prompt', "You are a helpful assistant.")
     
     temp_values_to_run = [temp_config]
-    if app_config_state_dict['vary_temperature'] and temp_config > 0.01: 
+    if app_config_state_dict.get('vary_temperature', False) and temp_config > 0.01: 
         temp_values_to_run = sorted(list(set([
             round(max(0.01, temp_config * 0.5), 2), temp_config, 
             round(min(1.0, temp_config * 1.5), 2) if temp_config * 1.5 <=1.0 else temp_config])))
 
     top_p_values_to_run = [top_p_config]
-    if app_config_state_dict['vary_top_p'] and top_p_config > 0.01:
+    if app_config_state_dict.get('vary_top_p', False) and top_p_config > 0.01:
         top_p_values_to_run = sorted(list(set([
             round(max(0.01, top_p_config * 0.5), 2), top_p_config,
             round(min(1.0, top_p_config * 1.5),2) if top_p_config * 1.5 <= 1.0 else top_p_config])))
         
     selected_ai_model_ids = app_config_state_dict.get('selected_models', [])
-    
     bot_response_content_parts = [] 
 
     if not selected_ai_model_ids:
-        ai_response_text = "System: No AI model selected in configuration."
-        bot_response_content_parts.append(ai_response_text)
+        final_bot_response = "System: No AI model selected in configuration."
     else:
         for model_id in selected_ai_model_ids:
+            # Ensure AVAILABLE_MODELS_DICT, gemini_model_genai, together_client, openai_client are accessible
+            # And generate_response_gemini, generate_response_together_ai, generate_response_openai_api are defined
             model_detail = AVAILABLE_MODELS_DICT.get(model_id, {})
             model_type = model_detail.get("type")
             model_display_name = model_detail.get("name", model_id)
@@ -781,15 +827,20 @@ def chat_interface_backend(user_input, chat_history_list_messages, selected_db_s
                     model_info_str = f"{model_display_name} (T:{temp_val}, P:{top_p_val})"
                     bot_response_content_parts.append(f"--- {model_info_str} ---\n{response_content}")
 
-                    if not app_config_state_dict['vary_top_p']: break 
-                if not app_config_state_dict['vary_temperature']: break 
-        
-    final_bot_response = "\n\n".join(bot_response_content_parts)
-    if not final_bot_response:
-        final_bot_response = "No responses generated or models configured."
+                    if not app_config_state_dict.get('vary_top_p', False): break 
+                if not app_config_state_dict.get('vary_temperature', False): break 
+        final_bot_response = "\n\n".join(bot_response_content_parts)
+        if not final_bot_response:
+            final_bot_response = "No responses generated or models configured."
+    # --------------------------------------------------------------------
 
-    chat_history_list_messages.append({"role": "assistant", "content": final_bot_response})
-    return chat_history_list_messages
+    # Append the new user message and bot response as a new pair
+    current_chat_history.append([user_input, final_bot_response])
+
+    # Return the updated history in the correct format
+    return current_chat_history
+
+# --- End of backend.py relevant section ---
 
 def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_val):
     if sys.platform == "win32" and isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy):
