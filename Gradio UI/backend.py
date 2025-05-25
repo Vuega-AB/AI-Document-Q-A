@@ -817,7 +817,7 @@ def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_v
 
 
 # --- Backend Initialization ---
-def initialize_all_components(default_db="Dropbox"):
+def initialize_all_components(default_db="MongoDB"):
     global gemini_model_genai, together_client, openai_client, embedding_model, faiss_index, BACKEND_INITIAL_LOAD_MSG, mongo_client_instance, mongo_db_obj, auth_mongo_db_obj
 
     print("Initializing backend components...")
@@ -866,3 +866,9 @@ def initialize_all_components(default_db="Dropbox"):
     
     print(f"Backend Initial Load Status: {BACKEND_INITIAL_LOAD_MSG}")
     print("Backend initialization complete.")
+
+
+
+def get_backend_initial_load_message():
+    global BACKEND_INITIAL_LOAD_MSG
+    return BACKEND_INITIAL_LOAD_MSG

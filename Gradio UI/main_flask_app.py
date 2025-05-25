@@ -32,7 +32,7 @@ def run_flask_app_initializations():
         #     print("CRITICAL: MONGO_URI is not set in .env (for Flask App).")
         # else:
         #     print(f"MongoDB URI found for Flask App: {MONGO_URI[:20]}...")
-        initialize_all_components(default_db="Dropbox") # Or "MongoDB"
+        initialize_all_components(default_db="MongoDB") # Or "MongoDB"
         create_admin_user_if_not_exists(APP_ADMIN_EMAIL, APP_ADMIN_PASSWORD, role="admin")
         FLASK_APP_INITIALIZED = True
     else:

@@ -13,7 +13,7 @@ def run_gradio_server_initializations():
         else:
             print(f"MongoDB URI found for Gradio Server: {MONGO_URI[:20]}...")
 
-        initialize_all_components(default_db="Dropbox") 
+        initialize_all_components(default_db="MongoDB") 
 
         GRADIO_SERVER_INITIALIZED = True
     else:
