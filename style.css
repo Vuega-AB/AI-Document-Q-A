@@ -1,0 +1,781 @@
+/* style.css */
+:root {
+    /* Professional Color Palette */
+    --primary-color: #1A3A5F;    /* Deep Blue */
+    --secondary-color: #4A5C6A;  /* Slate Gray */
+    --accent-color: #C0A062;     /* Muted Gold */
+    --background-color: #F8F9FA; /* Light Off-White/Gray for main app bg */
+    --surface-color: #FFFFFF;    /* White for cards, inputs, sidebar */
+    --text-primary: #212529;     /* Dark Gray for text */
+    --text-secondary: #495057;   /* Medium Gray for less important text */
+    --text-on-primary: #FFFFFF;  /* Text color on primary background */
+    --text-on-accent: #FFFFFF;   /* Text color on accent background */
+    --border-color: #DEE2E6;     /* Light border color */
+    --danger-color: #cb2431;     /* For error messages */
+    --success-color: #22863a;    /* For success messages */
+
+    /* Typography */
+    --font-heading: 'Merriweather', serif;
+    --font-body: 'Open Sans', sans-serif;
+    --font-ui: 'Open Sans', sans-serif; /* For buttons, inputs etc. */
+
+    /* UI Variables */
+    --border-radius-sm: 4px;
+    --border-radius-md: 8px;
+    --box-shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+    --box-shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --sidebar-width: 260px;
+    --header-height: 65px;
+}
+
+/* Basic Reset & Global Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--background-color); /* Default bg for auth screen */
+    color: var(--text-primary);
+    height: 100vh;
+    overflow: hidden;
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* --- Auth Page Styles --- */
+.auth-screen {
+    width: 100%;
+    min-height: 100vh;
+    background-color: var(--surface-color); /* Auth screen bg */
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+}
+
+.auth-logo-standalone {
+    position: absolute;
+    top: 40px;
+    left: 40px;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    font-family: var(--font-heading);
+}
+
+.auth-content-wrapper {
+    width: 100%;
+    max-width: 420px;
+    text-align: left;
+    background-color: var(--surface-color);
+    padding: 30px 40px;
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-md);
+}
+
+.auth-content-wrapper h2 {
+    font-family: var(--font-heading);
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.auth-info {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+.auth-content-wrapper .form-group {
+    margin-bottom: 20px;
+}
+
+.auth-content-wrapper label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.auth-content-wrapper input[type="text"],
+.auth-content-wrapper input[type="email"],
+.auth-content-wrapper input[type="password"] {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    background-color: #F8F9FA; /* Slightly off-white input bg */
+    font-family: var(--font-ui);
+    color: var(--text-primary);
+}
+
+.auth-content-wrapper input[type="text"]:focus,
+.auth-content-wrapper input[type="email"]:focus,
+.auth-content-wrapper input[type="password"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(26, 58, 95, 0.2);
+}
+
+.btn-auth-action {
+    width: 100%;
+    background-color: var(--primary-color);
+    color: var(--text-on-primary);
+    padding: 12px 16px;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-top: 10px;
+}
+
+.btn-auth-action:hover {
+    background-color: var(--secondary-color); /* Darken primary or use secondary */
+}
+
+.auth-switch {
+    text-align: center;
+    margin-top: 24px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.auth-switch a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+.auth-message {
+    text-align: center;
+    margin-top: 15px;
+    font-size: 0.9rem;
+    min-height: 20px;
+    font-weight: 600;
+}
+.auth-message.success {
+    color: var(--success-color);
+}
+.auth-message.error {
+    color: var(--danger-color);
+}
+
+
+/* --- Main Application Styles --- */
+.app-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    background-color: var(--background-color); /* Main app area background */
+}
+
+/* --- Sidebar Styles --- */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--surface-color);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 15px;
+    border-right: 1px solid var(--border-color);
+    box-shadow: 2px 0 5px rgba(0,0,0,0.03);
+}
+
+.sidebar-top {
+    margin-bottom: 30px;
+    padding-left: 5px; /* Align with nav items */
+}
+
+.app-logo-sidebar {
+    display: flex;
+    align-items: center;
+}
+.app-logo-sidebar .logo-icon {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    font-family: var(--font-heading);
+    margin-right: 10px;
+}
+.app-logo-sidebar .app-name-sidebar {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-heading);
+}
+
+
+.sidebar-nav {
+    flex-grow: 1;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    margin-bottom: 8px;
+    border-radius: var(--border-radius-md);
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav-item:hover {
+    background-color: var(--primary-color);
+    color: var(--text-on-primary);
+}
+.nav-item.active {
+    background-color: var(--primary-color);
+    color: var(--text-on-primary);
+    box-shadow: 0 2px 5px rgba(26, 58, 95, 0.2);
+}
+
+.nav-item i {
+    margin-right: 12px;
+    width: 20px;
+    text-align: center;
+    font-size: 1.1rem; /* Slightly larger icons */
+}
+.nav-item.active i, .nav-item:hover i {
+    color: var(--text-on-primary); /* Icon color changes with background */
+}
+
+.search-item-sidebar { /* Specific styling for search in sidebar */
+    margin-top: 20px;
+    background-color: #F0F2F5; /* Light gray bg for search */
+    border-radius: var(--border-radius-sm);
+}
+.search-item-sidebar input {
+    flex-grow: 1;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 0.9rem;
+    padding: 10px 0px 10px 5px; /* Adjust padding */
+    font-family: var(--font-ui);
+    color: var(--text-primary);
+}
+.search-item-sidebar i {
+    color: var(--text-secondary);
+}
+
+.sidebar-bottom {
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    padding: 10px 5px; /* Align with nav items */
+    margin-bottom: 10px;
+}
+
+.avatar {
+    width: 36px;   /* Slightly larger avatar */
+    height: 36px;
+    background-color: var(--accent-color);
+    color: var(--text-on-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-right: 12px;
+    font-family: var(--font-heading);
+}
+
+.user-profile .user-name-sidebar {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+}
+
+.btn-logout {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 12px 15px;
+    background: transparent;
+    border: none;
+    border-radius: var(--border-radius-md);
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.btn-logout:hover {
+    background-color: var(--danger-color);
+    color: var(--text-on-primary);
+}
+.btn-logout i {
+    margin-right: 12px;
+    font-size: 1.1rem;
+}
+
+
+/* --- Main Content Area Styles --- */
+.main-content-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* Allow main content to scroll if needed */
+}
+
+.main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 30px;
+    border-bottom: 1px solid var(--border-color);
+    height: var(--header-height);
+    background-color: var(--surface-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+
+.header-title-section h1 {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Space between action icons */
+}
+.header-actions .icon-btn { /* General icon button style */
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+.header-actions .icon-btn:hover {
+    color: var(--primary-color);
+    background-color: #E9ECEF; /* Light hover for icon buttons */
+}
+.header-actions .avatar { /* Avatar in header */
+    width: 32px;
+    height: 32px;
+    font-size: 0.9rem;
+    margin-left: 10px; /* Space before avatar */
+}
+
+
+.content-wrapper {
+    flex-grow: 1;
+    padding: 30px;
+    overflow-y: auto; /* If content inside wrapper needs to scroll */
+}
+
+.dashboard-welcome {
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 20px;
+    background-color: var(--surface-color);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+}
+.welcome-logo-main {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    font-family: var(--font-heading);
+    margin-bottom: 10px;
+}
+.dashboard-welcome h2 {
+    font-family: var(--font-heading);
+    font-size: 2rem;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+.dashboard-welcome p {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 25px;
+    margin-bottom: 40px;
+}
+
+.action-card {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: 25px;
+    text-align: center;
+    box-shadow: var(--box-shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+.action-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--box-shadow-md);
+}
+.action-card i {
+    color: var(--accent-color); /* Icon color for action cards */
+    margin-bottom: 15px;
+}
+.action-card h5 {
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    color: var(--primary-color);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+.action-card p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.ai-assistant-panel {
+    background-color: var(--surface-color);
+    padding: 25px;
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-sm);
+    margin-top: 30px;
+}
+.ai-assistant-panel h4 {
+    font-family: var(--font-heading);
+    font-size: 1.3rem;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+}
+.ai-assistant-panel h4 i {
+    margin-right: 10px;
+    color: var(--accent-color);
+}
+.ai-assistant-panel p {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+.ai-input-area {
+    display: flex;
+    flex-direction: column; /* Stack textarea and button */
+    gap: 10px;
+}
+.ai-input-area textarea {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    font-family: var(--font-ui);
+    background-color: #F8F9FA;
+    resize: vertical; /* Allow vertical resize */
+    min-height: 80px;
+}
+.ai-input-area textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(26, 58, 95, 0.2);
+}
+.btn-primary { /* General primary button style */
+    background-color: var(--primary-color);
+    color: var(--text-on-primary);
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: inline-flex; /* For icon alignment */
+    align-items: center;
+    justify-content: center;
+}
+.btn-primary:hover {
+    background-color: var(--secondary-color);
+}
+.btn-primary i {
+    margin-left: 8px;
+}
+.btn-ai-send {
+    align-self: flex-end; /* Align button to the right */
+}
+
+/* Original Chat Input Area (if you repurpose it) */
+/*
+.chat-input-area {
+    display: flex;
+    align-items: center;
+    padding: 15px 25px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--surface-color);
+    height: 70px;
+}
+*/
+/* --- Admin User Management - ALL USERS TABLE Styles (NEW / REFINED) --- */
+#adminUserManagementView {
+    padding: 25px 30px; /* Consistent padding */
+    background-color: var(--surface-color);
+    border-radius: var(--border-radius-md);
+    /* Removed box-shadow to match screenshot's flatter look for this view */
+}
+
+.user-management-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.user-management-header h3 {
+    font-family: var(--font-heading);
+    color: var(--text-primary); /* Darker, more prominent */
+    margin: 0;
+    font-size: 1.8rem; /* Slightly larger */
+    font-weight: 600;
+}
+.user-management-header h3 #userCount {
+    font-size: 1.5rem; /* Make count more prominent */
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.user-management-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.user-management-controls input[type="text"]#userSearchInput {
+    padding: 9px 12px; /* Match button height better */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    font-size: 0.9rem;
+    min-width: 280px; /* Wider search input */
+    font-family: var(--font-ui);
+}
+.user-management-controls input[type="text"]#userSearchInput:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(26, 58, 95, 0.15);
+}
+
+.user-management-controls .btn-primary,
+.user-management-controls .btn-secondary {
+    padding: 8px 15px; /* Adjust padding for consistency */
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: var(--font-ui);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    transition: background-color 0.2s ease;
+}
+.user-management-controls .btn-primary {
+    background-color: var(--primary-color);
+    color: var(--text-on-primary);
+}
+.user-management-controls .btn-primary:hover {
+    background-color: var(--secondary-color);
+}
+.user-management-controls .btn-secondary { /* For Refresh button */
+    background-color: var(--surface-color);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+.user-management-controls .btn-secondary:hover {
+    background-color: #e9ecef; /* Light gray hover */
+}
+.user-management-controls .btn-primary i,
+.user-management-controls .btn-secondary i {
+    margin-right: 6px;
+}
+
+
+.table-responsive-wrapper {
+    overflow-x: auto;
+    border: 1px solid var(--border-color); /* Border around the table */
+    border-radius: var(--border-radius-md);
+    background-color: var(--surface-color); /* Ensure table bg is white */
+}
+
+#allUsersTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    min-width: 800px; /* Prevent extreme squishing on small viewports before scroll */
+}
+
+#allUsersTable th,
+#allUsersTable td {
+    text-align: left;
+    padding: 14px 18px; /* Slightly more padding */
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+    white-space: nowrap; /* Prevent text wrapping for most cells */
+}
+#allUsersTable tr:last-child td {
+    border-bottom: none; /* Remove bottom border from last row */
+}
+
+#allUsersTable th {
+    background-color: #f9fafb; /* Very light gray for table header */
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-family: var(--font-ui);
+    text-transform: uppercase;
+    font-size: 0.75rem; /* Smaller header text */
+    letter-spacing: 0.75px;
+}
+
+#allUsersTable tbody tr:hover {
+    background-color: #f0f2f5;
+}
+
+.status-badge {
+    padding: 3px 10px; /* Adjusted padding */
+    border-radius: 12px; /* More pill-like */
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    text-transform: capitalize;
+    border: 1px solid transparent; /* Base border */
+}
+.status-badge i {
+    margin-right: 6px;
+    font-size: 0.7rem;
+}
+
+/* Matching screenshot colors for badges more closely */
+.status-badge.admin-badge { background-color: #e7f3ff; color: #005fc8; border-color: #b3d7ff;} /* Light blue */
+.status-badge.pending-badge { background-color: #fff8e1; color: #f57c00; border-color: #ffe082;} /* Light yellow/orange */
+.status-badge.approved-badge { background-color: #e8f5e9; color: #2e7d32; border-color: #a5d6a7;} /* Light green */
+
+
+.user-name-cell {
+    display: flex;
+    align-items: center;
+    color: var(--text-primary); /* Ensure name is dark */
+    font-weight: 500; /* Slightly bolder name */
+}
+.table-avatar {
+    width: 28px;
+    height: 28px;
+    background-color: var(--accent-color); /* Your theme's accent */
+    color: var(--text-on-accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: 600;
+    font-size: 0.8rem;
+    margin-right: 12px;
+    font-family: var(--font-heading);
+    flex-shrink: 0;
+}
+
+.role-cell {
+    cursor: pointer;
+    font-weight: 500; /* Less bold than name */
+    text-transform: capitalize;
+    color: var(--text-secondary);
+    padding: 4px 8px; /* Make it look like a clickable button/tag */
+    border-radius: var(--border-radius-sm);
+    transition: background-color 0.2s ease;
+}
+.role-cell:hover {
+    background-color: #e9ecef;
+    color: var(--primary-color);
+}
+
+#allUsersTable td:nth-child(4), /* Email */
+#allUsersTable td:nth-child(5) { /* Created At */
+    color: var(--text-secondary);
+    white-space: normal; /* Allow email to wrap if very long */
+}
+
+
+.actions-cell {
+    text-align: right;
+}
+.actions-cell .action-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px; /* Slightly more clickable area */
+    margin-left: 8px;
+    font-size: 1.1rem; /* Make icons a bit larger to match screenshot */
+    transition: color 0.2s ease;
+    line-height: 1; /* Ensure icon is centered if it has weird spacing */
+}
+.actions-cell .action-btn:hover { color: var(--primary-color); }
+.actions-cell .approve-user-btn:hover { color: var(--success-color); } /* Approve icon */
+.actions-cell .edit-role-btn:hover { color: var(--accent-color); } /* Edit/tag icon */
+.actions-cell .delete-user-btn:hover { color: var(--danger-color); } /* Delete icon */
+
+
+.pagination-controls {
+    margin-top: 25px;
+    text-align: center;
+    /* Add styles for pagination buttons here if you implement pagination */
+}
+.table-footer-note {
+    margin-top: 20px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-align: center; /* Center as in screenshot */
+}
+.table-footer-note i {
+    margin-right: 5px;
+    color: var(--text-secondary);
+}
+
+/* Loading/Error messages within table */
+#allUsersTable td .error-message,
+#allUsersTable td i.fa-spinner {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+#allUsersTable td i.fa-spinner { margin-right: 8px; color: var(--primary-color); }

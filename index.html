@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lawyer App</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Auth Screen -->
+    <div class="auth-screen">
+        <!-- ... (Auth screen content - same as before) ... -->
+         <div class="auth-logo-standalone">LA</div>
+        <div class="auth-content-wrapper">
+            <div id="signupContainer">
+                <h2>Create Your Lawyer App Account</h2>
+                <p class="auth-info">Register to request access. Your account will require admin approval.</p>
+                <form id="signupForm">
+                    <div class="form-group"><label for="signupName">Full Name</label><input type="text" id="signupName" required></div>
+                    <div class="form-group"><label for="signupEmail">Email Address</label><input type="email" id="signupEmail" required></div>
+                    <div class="form-group"><label for="signupPassword">Password</label><input type="password" id="signupPassword" required></div>
+                    <button type="submit" class="btn-auth-action">Request Account</button>
+                </form>
+                <p class="auth-switch">Already have an account? <a href="#" id="showSignInLink">Sign In</a></p>
+            </div>
+            <div id="signinContainer" style="display: none;">
+                <h2>Sign In to Lawyer App</h2>
+                <p class="auth-info">Welcome back! Access your workspace.</p>
+                <form id="signinForm">
+                    <div class="form-group"><label for="signinEmail">Email Address</label><input type="email" id="signinEmail" required></div>
+                    <div class="form-group"><label for="signinPassword">Password</label><input type="password" id="signinPassword" required></div>
+                    <button type="submit" class="btn-auth-action">Sign In</button>
+                </form>
+                <p class="auth-switch">Don't have an account? <a href="#" id="showSignUpLink">Sign Up</a></p>
+            </div>
+            <p id="authMessage" class="auth-message"></p>
+        </div>
+    </div>
+
+    <!-- Main Application Container -->
+    <div class="app-container" style="display: none;">
+        <aside class="sidebar">
+            <!-- ... (Sidebar content - User Management link should be present for admin) ... -->
+            <div class="sidebar-top">
+                <div class="app-logo-sidebar"><span class="logo-icon">LA</span><span class="app-name-sidebar">Lawyer App</span></div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item admin-dashboard-link" data-role="admin" data-original-display="flex"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                <a href="#" class="nav-item admin-user-management-link" data-role="admin" data-original-display="flex"><i class="fas fa-users-cog"></i> User Management</a>
+                <a href="#" class="nav-item" data-role="admin" data-original-display="flex"><i class="fas fa-briefcase"></i> Cases</a>
+                <a href="#" class="nav-item ai-assistant-link active" data-role="user" data-original-display="flex"><i class="fas fa-robot"></i> AI Assistant</a>
+                <div class="nav-item search-item-sidebar" data-role="admin" data-original-display="flex"><i class="fas fa-search"></i><input type="text" placeholder="Search..."></div>
+            </nav>
+            <div class="sidebar-bottom">
+                <div class="user-profile"><div class="avatar" id="userAvatar">LA</div><span id="userNameDisplay" class="user-name-sidebar">Lawyer</span></div>
+                <button id="logoutButton" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</button>
+            </div>
+        </aside>
+
+        <main class="main-content-area">
+            <header class="main-header">
+                <div class="header-title-section"><h1 id="currentSectionTitle">AI Assistant</h1></div>
+                <div class="header-actions">
+                    <button class="icon-btn btn-notifications" data-role="admin" data-original-display="inline-block"><i class="fas fa-bell"></i></button>
+                    <button class="icon-btn btn-settings" data-role="admin" data-original-display="inline-block"><i class="fas fa-cog"></i></button>
+                    <div class="avatar" id="chatHeaderUserAvatar">LA</div>
+                </div>
+            </header>
+
+            <div class="content-wrapper">
+                <div id="adminDashboardView" class="view-section" data-role="admin" data-original-display="block">
+                    <!-- ... (Admin dashboard content) ... -->
+                    <div class="dashboard-welcome">
+                        <div class="welcome-logo-main">LA</div>
+                        <h2 id="welcomeUserFullName">Welcome back, Admin!</h2>
+                        <p>Your central hub for managing legal work.</p>
+                    </div>
+                </div>
+
+                <!-- MODIFIED: Admin User Management View for ALL USERS -->
+                <div id="adminUserManagementView" class="view-section" data-role="admin" style="display: none;" data-original-display="block">
+                    <div class="user-management-header">
+                        <h3>All Users (<span id="userCount">0</span>)</h3>
+                        <div class="user-management-controls">
+                            <input type="text" id="userSearchInput" placeholder="Search users by name or email...">
+                            <button id="addUserBtn" class="btn-primary"><i class="fas fa-plus"></i> Add User</button>
+                            <button id="refreshAllUsersBtn" class="btn-secondary"><i class="fas fa-sync-alt"></i> Refresh</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive-wrapper">
+                        <table id="allUsersTable">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Role</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Created At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allUsersTableBody">
+                                <!-- User rows will be injected here by JS -->
+                                <tr><td colspan="6">Loading users...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination-controls">
+                        <!-- Pagination will be added here if needed -->
+                    </div>
+                     <p class="table-footer-note"><i class="fas fa-info-circle"></i> Click on role/status to toggle. Action icons for more options.</p>
+                </div>
+
+                <div id="aiAssistantView" class="view-section" data-role="user" style="display: none;" data-original-display="block">
+                    <!-- ... (AI Assistant content) ... -->
+                     <div class="ai-assistant-panel">
+                        <h4><i class="fas fa-robot"></i> AI Legal Assistant</h4>
+                        <p>Ask questions, draft documents, or get legal insights.</p>
+                        <div class="ai-input-area">
+                             <textarea id="aiChatInput" placeholder="Ask the AI Assistant..."></textarea>
+                             <button id="aiSendButton" class="btn-primary btn-ai-send">Send <i class="fas fa-paper-plane"></i></button>
+                        </div>
+                        <div class="ai-messages-display"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="script.js"></script>
+    
+</body>
+</html>
