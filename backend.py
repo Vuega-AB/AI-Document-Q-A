@@ -29,6 +29,7 @@ import tempfile
 import bcrypt
 import gradio
 from datetime import datetime # Make sure datetime is imported
+from datetime import datetime, timezone # MODIFIED: Added timezone
 
 # --- Environment Variables & Initializations ---
 load_dotenv()
@@ -78,6 +79,12 @@ AVAILABLE_MODELS_NAMES = [details['name'] for details in AVAILABLE_MODELS_DICT.v
 MODEL_NAME_TO_ID_MAP = {details['name']: model_id for model_id, details in AVAILABLE_MODELS_DICT.items()}
 MODEL_ID_TO_NAME_MAP = {v: k for k, v in MODEL_NAME_TO_ID_MAP.items()}
 
+# --- Status Constants ---
+STATUS_PENDING_EMAIL_CONFIRMATION = "pending_email_confirmation"
+STATUS_ACTIVE = "active"
+STATUS_SUSPENDED = "suspended"
+STATUS_DEACTIVATED = "deactivated" # This will be our "soft delete" status
+
 # --- Password Hashing Functions ---
 def hash_password(password: str) -> bytes:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
@@ -104,12 +111,14 @@ def create_admin_user_if_not_exists(email, plain_password, role="admin"):
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
     
     user = users_collection.find_one({"email": email})
+    current_dt = datetime.now(timezone.utc) # MODIFIED: Use datetime
+
     if user:
         print(f"User {email} already exists.")
-        if user.get("status") != "active" or user.get("role") != "admin":
+        if user.get("status") != STATUS_ACTIVE or user.get("role") != "admin":
             users_collection.update_one(
                 {"email": email},
-                {"$set": {"status": "active", "role": "admin", "updated_at": time.time()}}
+                {"$set": {"status": STATUS_ACTIVE, "role": "admin", "updated_at": current_dt}} # MODIFIED
             )
             print(f"Updated user {email} to ensure admin role and active status.")
         return True
@@ -120,9 +129,10 @@ def create_admin_user_if_not_exists(email, plain_password, role="admin"):
             "email": email,
             "password": hashed_pass,
             "role": role,
-            "status": "active",
-            "created_at": time.time(), # Storing as float (Unix timestamp)
-            "updated_at": time.time()
+            "status": STATUS_ACTIVE, # Admins are active by default
+            "created_at": current_dt, # MODIFIED
+            "updated_at": current_dt, # MODIFIED
+            "full_name": email.split('@')[0] # Added for consistency
         })
         print(f"Admin user {email} created successfully with active status.")
         return True
@@ -130,31 +140,81 @@ def create_admin_user_if_not_exists(email, plain_password, role="admin"):
         print(f"Error creating admin user {email}: {e}")
         return False
 
+
 def create_user(email, plain_password):
+    """Creates a new user with 'pending_email_confirmation' status."""
     db = get_auth_db()
     if db is None:
         return False, "Database error, please try again later."
     
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    if users_collection.find_one({"email": email}):
-        return False, "Email address already registered."
-    
+    existing_user = users_collection.find_one({"email": email})
+    current_dt = datetime.now(timezone.utc) # MODIFIED
+
+    if existing_user:
+        # If user exists and status is NOT pending_email_confirmation, then it's a conflict
+        if existing_user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
+            return False, "Email address already registered and confirmed or in another state."
+        else:
+            # User exists but email not confirmed. Update password and resend (implicitly by signup flow)
+            hashed_pass = hash_password(plain_password)
+            users_collection.update_one(
+                {"email": email},
+                {"$set": {
+                    "password": hashed_pass,
+                    "updated_at": current_dt,
+                    "created_at": current_dt # Reset creation time for new token validity period perhaps
+                }}
+            )
+            print(f"User {email} attempted signup again while pending email confirmation. Record updated.")
+            return True, "Confirmation email previously sent. Another attempt is being processed. Check your inbox."
+
     hashed_pass = hash_password(plain_password)
     try:
         users_collection.insert_one({
             "email": email,
             "password": hashed_pass,
             "role": "user",
-            "status": "pending", # New users start as pending
-            "created_at": time.time(), # Storing as float (Unix timestamp)
-            "updated_at": time.time()
-            # Consider adding 'full_name': email.split('@')[0] here if desired
+            "status": STATUS_PENDING_EMAIL_CONFIRMATION, # MODIFIED
+            "created_at": current_dt, # MODIFIED
+            "updated_at": current_dt, # MODIFIED
+            "full_name": email.split('@')[0] # Added default full_name
         })
-        print(f"User {email} registered with pending status.")
-        return True, "Registration successful! Your account is pending admin approval."
+        print(f"User {email} registered with {STATUS_PENDING_EMAIL_CONFIRMATION} status.")
+        # Message changed, Flask will provide the user-facing message after sending email
+        return True, "User record created, pending email confirmation."
     except Exception as e:
         print(f"Error creating user {email}: {e}")
         return False, "An error occurred during registration."
+
+def confirm_user_email_in_db(email):
+    """Confirms a user's email and sets status to 'pending_admin_approval'."""
+    db = get_auth_db()
+    if db is None: return False, "Database error."
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    user = users_collection.find_one({"email": email})
+    if not user: return False, "User not found."
+    
+    # Check current status for idempotency or incorrect state
+    if user.get("status") == STATUS_SUSPENDED:
+        return True, "Email already confirmed and pending admin approval."
+    if user.get("status") == STATUS_ACTIVE:
+        return True, "Email already confirmed and account is active."
+    if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
+        return False, f"Account is not awaiting email confirmation (current status: {user.get('status')})."
+
+    try:
+        result = users_collection.update_one(
+            {"email": email, "status": STATUS_PENDING_EMAIL_CONFIRMATION},
+            {"$set": {"status": STATUS_SUSPENDED, "updated_at": datetime.now(timezone.utc)}}
+        )
+        if result.modified_count > 0:
+            return True, "Email confirmed successfully. Your account is now pending admin approval."
+        return False, "Email confirmation failed or user not in correct state."
+    except Exception as e:
+        print(f"Error confirming email for {email}: {e}")
+        return False, "An error occurred during email confirmation."
+
 
 def get_user_by_email(email):
     db = get_auth_db()
@@ -165,79 +225,101 @@ def get_user_by_email(email):
     return users_collection.find_one({"email": email})
 
 def get_all_users_from_db():
-    """Fetches all users from the database for admin display."""
+    # ... (ensure this function correctly fetches all users and converts timestamps to datetime) ...
+    # Make sure it returns the 'status' field as is from the DB.
+    # The renaming of 'pending' to 'pending_admin_approval' will be reflected here if the DB stores it that way.
     db = get_auth_db()
-    if db is None:
-        print("ERROR: MongoDB for auth not available in backend.get_all_users_from_db")
-        return []
-    
+    if db is None: return []
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
     try:
         users_cursor = users_collection.find({})
         users_list = []
         for user_doc in users_cursor:
             user_doc['_id'] = str(user_doc['_id'])
-            
-            if 'password' in user_doc: # Never send password hash to frontend
-                del user_doc['password']
-            
-            # Convert 'created_at' from float timestamp to datetime object for consistent processing
-            if 'created_at' in user_doc and isinstance(user_doc['created_at'], (int, float)):
-                user_doc['created_at'] = datetime.fromtimestamp(user_doc['created_at'])
-            
-            # Convert 'updated_at' if it exists and is a float timestamp
-            if 'updated_at' in user_doc and isinstance(user_doc['updated_at'], (int, float)):
-                user_doc['updated_at'] = datetime.fromtimestamp(user_doc['updated_at'])
-
-            # Convert 'last_login_at' if it exists (assuming it might be stored as float)
-            if 'last_login_at' in user_doc and isinstance(user_doc['last_login_at'], (int, float)):
-                user_doc['last_login_at'] = datetime.fromtimestamp(user_doc['last_login_at'])
-            
-            # Ensure 'full_name' for display, derive from email if not present
-            if 'full_name' not in user_doc and 'email' in user_doc:
-                user_doc['full_name'] = user_doc['email'].split('@')[0]
-            elif 'full_name' not in user_doc:
-                user_doc['full_name'] = "N/A"
-                
+            if 'password' in user_doc: del user_doc['password']
+            for ts_field in ["created_at", "updated_at", "last_login_at"]: # Add deleted_at
+                if ts_field in user_doc:
+                    if isinstance(user_doc[ts_field], (int, float)):
+                        user_doc[ts_field] = datetime.fromtimestamp(user_doc[ts_field], timezone.utc)
+                    elif isinstance(user_doc[ts_field], datetime) and user_doc[ts_field].tzinfo is None:
+                         user_doc[ts_field] = user_doc[ts_field].replace(tzinfo=timezone.utc)
+            if 'full_name' not in user_doc or not user_doc['full_name']:
+                user_doc['full_name'] = user_doc.get('email', "N/A").split('@')[0]
             users_list.append(user_doc)
         return users_list
     except Exception as e:
-        print(f"Error fetching all users: {e}")
-        return []
+        print(f"Error fetching all users: {e}"); return []
 
 def update_user_status_in_db(user_email, new_status):
     """Updates the status of a user in the database."""
     db = get_auth_db()
-    if db is None:
-        print("ERROR: MongoDB for auth not available in backend.update_user_status_in_db")
-        return False, "Database not connected."
-    
+    if db is None: return False, "Database not connected."
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
     
-    allowed_statuses = ["active", "pending", "suspended", "deactivated"]
-    if new_status not in allowed_statuses:
-        return False, f"Invalid status '{new_status}'. Allowed statuses are: {', '.join(allowed_statuses)}."
+    # Admin should only be able to set these statuses via the dropdown
+    admin_allowed_statuses = [STATUS_ACTIVE, STATUS_SUSPENDED, STATUS_DEACTIVATED]
+    if new_status not in admin_allowed_statuses:
+        return False, f"Invalid target status '{new_status}' for admin action."
+
+    current_user_state = users_collection.find_one({"email": user_email})
+    if not current_user_state:
+        return False, f"User with email '{user_email}' not found."
+
+    # Prevent setting to PENDING_EMAIL_CONFIRMATION or other non-admin-settable states
+    if new_status == STATUS_PENDING_EMAIL_CONFIRMATION: # Double check
+        return False, "Admin cannot set status to 'Pending Email Confirmation'."
 
     try:
-        # Use float timestamp for updated_at, consistent with created_at
-        current_time_for_update = time.time() 
+        current_dt = datetime.now(timezone.utc)
+        update_fields = {"status": new_status, "updated_at": current_dt}
+        
+        if new_status == STATUS_DEACTIVATED:
+            update_fields["deleted_at"] = current_dt
+        # If changing FROM deactivated TO active/suspended, clear deleted_at
+        elif current_user_state.get("status") == STATUS_DEACTIVATED and new_status != STATUS_DEACTIVATED:
+            update_fields["deleted_at"] = None 
 
-        result = users_collection.update_one(
-            {"email": user_email},
-            {"$set": {"status": new_status, "updated_at": current_time_for_update}}
-        )
-        if result.matched_count == 0:
-            return False, f"User with email '{user_email}' not found."
-        if result.modified_count == 0:
-            # Check if the status was already the new_status
-            current_user = users_collection.find_one({"email": user_email})
-            if current_user and current_user.get("status") == new_status:
-                 return True, f"User status for '{user_email}' was already '{new_status}'. No change made but considered success." # Treat as success
-            return False, f"User status for '{user_email}' could not be updated (already '{new_status}' or other issue)."
-        return True, f"User '{user_email}' status updated to '{new_status}'."
+        result = users_collection.update_one({"email": user_email}, {"$set": update_fields})
+        
+        if result.modified_count > 0:
+            return True, f"User '{user_email}' status updated to '{new_status}'."
+        elif result.matched_count == 1 and current_user_state.get("status") == new_status:
+             return True, f"User status for '{user_email}' was already '{new_status}'. No change made."
+        return False, f"User status for '{user_email}' could not be updated."
     except Exception as e:
         print(f"Error updating user status for {user_email}: {e}")
         return False, "An error occurred while updating user status."
+
+def hard_delete_user_from_db(user_email): # <<< NEW FUNCTION
+    """Permanently deletes a user from the database by their email."""
+    db = get_auth_db()
+    if db is None:
+        return False, "Database not connected. User not deleted."
+
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    user_to_delete = users_collection.find_one({"email": user_email})
+
+    if not user_to_delete:
+        return False, f"User with email '{user_email}' not found. No deletion performed."
+
+    # IMPORTANT: Add checks here if there are users that should NEVER be hard-deleted
+    # e.g., if user_email is the APP_ADMIN_EMAIL. This check is also done in Flask.
+    # if user_email == "your_super_admin@example.com":
+    # return False, "This critical admin account cannot be hard deleted."
+
+    try:
+        result = users_collection.delete_one({"email": user_email})
+        if result.deleted_count == 1:
+            print(f"User '{user_email}' HARD DELETED successfully from the database.")
+            return True, f"User '{user_email}' has been permanently deleted."
+        else:
+            # This case means find_one found it, but delete_one didn't delete it.
+            # Highly unlikely if find_one worked, unless there's a race condition or replica set issue.
+            print(f"Warning: User '{user_email}' found but not hard deleted. Deleted count: {result.deleted_count}")
+            return False, f"User '{user_email}' was found but could not be deleted. Please check logs."
+    except Exception as e:
+        print(f"Error hard deleting user {user_email} from database: {e}")
+        return False, f"An error occurred while trying to permanently delete user '{user_email}'."
 
 # --- Dropbox Functions ---
 # ... (existing Dropbox functions: load_access_token, save_access_token, get_dropbox_access_token, get_valid_access_token, initialize_dropbox_client) ...
@@ -720,6 +802,7 @@ def handle_pdf_upload_backend(files_obj_list, selected_db_from_state):
     status_summary = "\n".join(alerts)
     cb_update, md_update = _build_file_list_updates()
     return status_summary, cb_update, md_update
+
 
 def delete_files_backend(filenames_to_delete, selected_db):
     global text_store, faiss_index, embedding_model

@@ -1,0 +1,12 @@
+Welcome to {{ app_name }}!
+
+Hello,
+
+Thank you for signing up. Please visit the link below to confirm your email address:
+
+{{ confirm_url }}
+
+This link will expire in 24 hours. If you did not request this, please ignore this email.
+
+Thanks,
+The {{ app_name }} Team
