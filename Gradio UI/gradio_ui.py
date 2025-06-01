@@ -152,7 +152,7 @@ def create_gradio_app():
                         temp_slider = gr.Slider(label="Temperature", minimum=0.0, maximum=1.0, step=0.01, value=0.7)
                         vary_top_p = gr.Checkbox(label="Vary Top-P", value=False)
                         top_p_slider = gr.Slider(label="Top-P", minimum=0.0, maximum=1.0, step=0.01, value=0.9)
-                        system_prompt = gr.Textbox(label="System Prompt", lines=4, value="You are a helpful assistant...")
+                        system_prompt = gr.Textbox(label="System Prompt", lines=4, value="Answer questions strictly based on the provided context. If there is no context, say 'I don't have enough information to answer that.'")
                         gr.Markdown("---")
                         gr.Markdown("#### Configuration File Management")
                         upload_config_btn = gr.UploadButton("Upload & Apply Config (JSON)", file_types=[".json"], variant="secondary", size="sm")
