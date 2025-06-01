@@ -6,7 +6,7 @@ from backend import (
     get_unique_filenames_from_text_store,
     switch_db_backend,
     handle_pdf_upload_backend,
-    chat_interface_backend, # CRITICAL: This function must be correctly implemented in backend.py
+    chat_interface_backend,
     run_scraper_backend,
     delete_files_backend,
     apply_uploaded_config_backend,
@@ -101,8 +101,9 @@ html.dark #app-title .gr-markdown h1 {
 .controls-column, .chat-column {
     border: 1px solid #e0e0e0 !important;
     border-radius: 8px !important;
-    display: flex !important;
-    flex-direction: column !important;
+    /* REMOVED display: flex !important; from here. Gradio's gr.Column manages its own display. */
+    /* It will be display:flex when visible and display:none when hidden. */
+    flex-direction: column !important; /* This is for internal layout when the column is visible */
     overflow: hidden !important;
     padding: 0 !important;
     min-height: 0 !important;
@@ -115,12 +116,14 @@ html.dark .controls-column, html.dark .chat-column {
     color: var(--light-text-dm) !important;
 }
 
+/* These flex properties define how the columns behave as items within the #main-content-row (which is display:flex) */
 .controls-column { flex: 0 0 450px !important; max-width: 500px !important; }
 .chat-column    { flex-grow: 1 !important; min-width: 300px !important; }
 
+
 .controls-column > .gr-form,
 .chat-column    > .gr-form {
-    display: flex !important;
+    display: flex !important; /* This ensures the gr.Form inside the column takes up space */
     flex-direction: column !important;
     flex-grow: 1 !important;
     min-height: 0 !important;
@@ -374,15 +377,19 @@ def create_gradio_app():
             gr.Markdown("# 📄 IntelLaw", elem_id="app-title")
             with gr.Row(elem_id="button-column-container"):
                 dummy = gr.Textbox(visible=False)
-                settings_btn = gr.Button("Settings", elem_id="settings-btn", variant="secondary")
+                # Define settings_btn but set its visibility to False initially.
+                # It will be made visible for admins by the demo.load() function.
+                settings_btn = gr.Button("Settings", elem_id="settings-btn", variant="secondary", visible=False)
                 sign_out_btn = gr.Button("Sign Out", elem_id="actual-sign-out-btn", variant="secondary")
+        
         settings_btn.click(fn=None, inputs=None, outputs=[dummy], js=js_settings_function())
         sign_out_btn.click(fn=None, inputs=None, outputs=[dummy], js=js_logout_function())
 
         # Main content
         with gr.Row(elem_id="main-content-row"):
-            # Controls Column
-            with gr.Column(elem_classes=["controls-column"]):
+            # Controls Column - Define it but set its visibility to False initially.
+            # It will be made visible for admins by the demo.load() function.
+            with gr.Column(elem_classes=["controls-column"], visible=False) as controls_column_element:
                 gr.Markdown("### 🛠️ Controls")
                 with gr.Accordion("Database Backend", open=True):
                     db_radio = gr.Radio(label="Choose Database", choices=["Dropbox", "MongoDB"], value="MongoDB")
@@ -418,21 +425,18 @@ def create_gradio_app():
                         scrape_btn = gr.Button("Start Scraping", variant="secondary", size="sm")
                         scraper_output = gr.Textbox(label="Scraper Output", lines=5, interactive=False)
 
-            # Chat Column
-            with gr.Column(elem_classes=["chat-column"]):
+            # Chat Column (always visible)
+            with gr.Column(elem_classes=["chat-column"]) as chat_column_element: # chat_column_element for potential future dynamic scaling
                 gr.Markdown("### 💬 Chat Interface")
-                # Initialize chatbot with an empty list to avoid None issues on first load if backend doesn't handle None
                 chatbot = gr.Chatbot(value=[], label="IntelLaw Chatbot", show_copy_button=True, bubble_full_width=False)
                 with gr.Row(elem_id="chat-input-container"):
                     chat_input = gr.Textbox(show_label=False, placeholder="Ask any question...", container=False)
                     send_btn = gr.Button("Send", variant="primary")
 
-        # States and Load
+        # States
         selected_db_state = gr.State("MongoDB")
-
         initial_model_id = MODEL_NAME_TO_ID_MAP.get(AVAILABLE_MODELS_NAMES[0]) if AVAILABLE_MODELS_NAMES and AVAILABLE_MODELS_NAMES[0] in MODEL_NAME_TO_ID_MAP else None
         selected_models_init = [initial_model_id] if initial_model_id else []
-
         app_config_state = gr.State({
             "selected_models": selected_models_init,
             "vary_temperature": True, "temperature": 0.7,
@@ -442,29 +446,52 @@ def create_gradio_app():
         status_msg = gr.State()
         success_flag = gr.State()
 
-        def update_ui_on_initial_load(current_app_config):
+        # Function to run on demo.load to set visibility and initial data based on user_role
+        def handle_visibility_and_initial_load(request: gr.Request, current_app_config):
+            user_role = "user" # Default to 'user'
+            if request and hasattr(request, "query_params") and request.query_params:
+                user_role = request.query_params.get("user_role", "user")
+
+            # Load initial UI data (e.g., DB status, file lists)
             db_msg, files_choices = get_initial_ui_data_for_gradio()
+            
+            # Determine initial selected model names for the dropdown
             selected_model_ids_from_state = current_app_config.get("selected_models", [])
             initial_selected_model_names = [
                 MODEL_ID_TO_NAME_MAP[m_id] for m_id in selected_model_ids_from_state if m_id in MODEL_ID_TO_NAME_MAP
             ]
-            if not initial_selected_model_names and AVAILABLE_MODELS_NAMES:
+            if not initial_selected_model_names and AVAILABLE_MODELS_NAMES: # Fallback if state is empty but models exist
                 first_available_model_name = AVAILABLE_MODELS_NAMES[0]
                 initial_selected_model_names = [first_available_model_name]
+            
+            admin_view = (user_role == "admin")
 
             return (
+                gr.update(visible=admin_view),  # For settings_btn
+                gr.update(visible=admin_view),  # For controls_column_element
+                # Updates for components inside controls_column (will be visible only if admin_view is True)
                 gr.update(value=db_msg),
-                gr.update(choices=files_choices, value=[]),
-                gr.update(value=initial_selected_model_names)
+                gr.update(choices=files_choices, value=[]), # For files_to_delete CheckboxGroup
+                gr.update(value=initial_selected_model_names) # For model_selector Dropdown
             )
 
         demo.load(
-            fn=update_ui_on_initial_load,
-            inputs=[app_config_state],
-            outputs=[db_status, files_to_delete, model_selector]
+            fn=handle_visibility_and_initial_load,
+            inputs=[app_config_state], # gr.Request is implicitly passed due to type hinting in the function
+            outputs=[
+                settings_btn,
+                controls_column_element,
+                db_status,          # Component inside controls_column_element
+                files_to_delete,    # Component inside controls_column_element
+                model_selector      # Component inside controls_column_element
+            ]
         )
 
         # Event handlers
+        # These handlers are for components mostly within the 'controls_column_element'.
+        # They will function correctly for admins when the column is visible.
+        # For users, these components are hidden, so interactions won't occur.
+
         db_radio.change(
             fn=switch_db_backend,
             inputs=[db_radio, selected_db_state],
@@ -474,10 +501,10 @@ def create_gradio_app():
         def handle_config_change(models_names, vary_t, temp, vary_p, top_p, sys_prompt, current_config_state):
             selected_model_ids = [MODEL_NAME_TO_ID_MAP[name] for name in models_names if name in MODEL_NAME_TO_ID_MAP]
             if len(selected_model_ids) > 3:
-                 gr.Warning("Maximum 3 AI models can be selected.")
+                 gr.Warning("Maximum 3 AI models can be selected.") # This warning is fine, only admins will see it.
                  selected_model_ids = selected_model_ids[:3]
             
-            updated_config = current_config_state.copy()
+            updated_config = current_config_state.copy() # Important to copy the state dict
             updated_config.update({
                 "selected_models": selected_model_ids,
                 "vary_temperature": vary_t, "temperature": temp,
@@ -500,15 +527,18 @@ def create_gradio_app():
             outputs=[status_msg, success_flag, app_config_state, model_selector, vary_temp, temp_slider, vary_top_p, top_p_slider, system_prompt]
         ).then(fn=_show_status_popup, inputs=[status_msg, success_flag], outputs=None)
 
-        def prepare_download(cfg):
-            path, msg, ok = generate_config_for_download_backend(cfg)
-            if not path: gr.Warning(msg)
-            elif ok: gr.Info(msg)
-            return path
+        def prepare_download(current_config_state):
+            path, msg, ok = generate_config_for_download_backend(current_config_state)
+            if not path and not ok: gr.Warning(msg) # Show warning only on failure
+            elif ok and path: gr.Info(msg) # Show info on success
+            # DownloadButton expects a filepath or None. If path is None, nothing happens or it might error.
+            # Ensure generate_config_for_download_backend returns a valid path or None.
+            return path if (path and ok) else None 
+            
         download_config_btn.click(
             fn=prepare_download,
             inputs=[app_config_state],
-            outputs=[download_config_btn]
+            outputs=[download_config_btn] # Output is the DownloadButton itself to trigger download
         )
 
         file_uploader.upload(
@@ -523,6 +553,7 @@ def create_gradio_app():
             outputs=[delete_status, files_to_delete]
         )
 
+        # Chat interactions are for everyone
         chat_inputs = [chat_input, chatbot, selected_db_state, app_config_state]
         send_btn.click(
             fn=chat_interface_backend,
