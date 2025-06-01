@@ -296,19 +296,3 @@ def create_gradio_app():
             outputs=[scraper_output, files_to_delete]
         )
         return demo
-
-if __name__ == "__main__":
-    create_gradio_app()
-    print("Creating Gradio app for Gradio Server process...")
-    demo = create_gradio_app()
-
-    # For Render, Gradio will listen on an internal port.
-    # Render maps its external service URL to this internal port.
-    gradio_port = int(os.getenv("GRADIO_PORT", 7860)) # Define GRADIO_PORT in Render
-    print(f"Launching Gradio server on 0.0.0.0:{gradio_port}...")
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=gradio_port,
-        share=False, # IMPORTANT for production
-        inbrowser=False,
-    )
