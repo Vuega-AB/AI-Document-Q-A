@@ -30,7 +30,12 @@ import bcrypt
 import gradio
 from datetime import datetime # Make sure datetime is imported
 from datetime import datetime, timezone # MODIFIED: Added timezone
+import random
+import string
+from datetime import datetime, timezone, timedelta
 
+def generate_otp(length=6):
+    return "".join(random.choices(string.digits, k=length))
 # --- Environment Variables & Initializations ---
 load_dotenv()
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
@@ -142,50 +147,165 @@ def create_admin_user_if_not_exists(email, plain_password, role="admin"):
 
 
 def create_user(email, plain_password):
-    """Creates a new user with 'pending_email_confirmation' status."""
+    """
+    Creates a new user with 'pending_email_confirmation' status,
+    generates an OTP, and stores it.
+    Returns: (success_bool, message_str, otp_str_or_None)
+    """
     db = get_auth_db()
     if db is None:
-        return False, "Database error, please try again later."
+        return False, "Database error, please try again later.", None
     
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    existing_user = users_collection.find_one({"email": email})
-    current_dt = datetime.now(timezone.utc) # MODIFIED
+    email_lower = email.lower()
+    existing_user = users_collection.find_one({"email": email_lower})
+    current_dt = datetime.now(timezone.utc)
+    
+    otp = generate_otp()
+    otp_expiry = current_dt + timedelta(minutes=10) # OTP valid for 10 minutes
 
     if existing_user:
-        # If user exists and status is NOT pending_email_confirmation, then it's a conflict
-        if existing_user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
-            return False, "Email address already registered and confirmed or in another state."
-        else:
-            # User exists but email not confirmed. Update password and resend (implicitly by signup flow)
+        if existing_user.get("status") == STATUS_PENDING_EMAIL_CONFIRMATION:
+            # User exists but email not confirmed. Update password, regenerate OTP.
             hashed_pass = hash_password(plain_password)
             users_collection.update_one(
-                {"email": email},
+                {"email": email_lower},
                 {"$set": {
                     "password": hashed_pass,
                     "updated_at": current_dt,
-                    "created_at": current_dt # Reset creation time for new token validity period perhaps
+                    "created_at": current_dt, # Optionally refresh for new OTP window
+                    "email_otp": otp,          # Update OTP
+                    "otp_expires_at": otp_expiry # Update OTP expiry
                 }}
             )
-            print(f"User {email} attempted signup again while pending email confirmation. Record updated.")
-            return True, "Confirmation email previously sent. Another attempt is being processed. Check your inbox."
+            print(f"User {email_lower} re-attempted signup. OTP regenerated.")
+            return True, "An OTP has been re-sent to your email.", otp
+        else: # User exists and is in another state (active, suspended)
+            return False, "Email address already registered and confirmed or in another state.", None
 
     hashed_pass = hash_password(plain_password)
     try:
-        users_collection.insert_one({
-            "email": email,
+        user_doc_fields = {
+            "email": email_lower,
             "password": hashed_pass,
             "role": "user",
-            "status": STATUS_PENDING_EMAIL_CONFIRMATION, # MODIFIED
-            "created_at": current_dt, # MODIFIED
-            "updated_at": current_dt, # MODIFIED
-            "full_name": email.split('@')[0] # Added default full_name
-        })
-        print(f"User {email} registered with {STATUS_PENDING_EMAIL_CONFIRMATION} status.")
-        # Message changed, Flask will provide the user-facing message after sending email
-        return True, "User record created, pending email confirmation."
+            "status": STATUS_PENDING_EMAIL_CONFIRMATION,
+            "created_at": current_dt,
+            "updated_at": current_dt,
+            "full_name": email_lower.split('@')[0],
+            "email_otp": otp,
+            "otp_expires_at": otp_expiry
+        }
+        users_collection.insert_one(user_doc_fields)
+        print(f"User {email_lower} registered with {STATUS_PENDING_EMAIL_CONFIRMATION} status. OTP generated.")
+        return True, "User record created. An OTP has been sent to your email.", otp
     except Exception as e:
-        print(f"Error creating user {email}: {e}")
-        return False, "An error occurred during registration."
+        print(f"Error creating user {email_lower}: {e}")
+        return False, "An error occurred during registration.", None
+
+def verify_otp_and_activate_user(email, submitted_otp):
+    """
+    Verifies the submitted OTP for the given email and activates the user if valid.
+    Returns: (success_bool, message_str)
+    """
+    db = get_auth_db()
+    if db is None: return False, "Database error."
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    email_lower = email.lower()
+    user = users_collection.find_one({"email": email_lower})
+
+    if not user: return False, "User not found."
+    if user.get("status") == STATUS_ACTIVE: return True, "Account already active."
+
+    if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
+        return False, "Account not awaiting email confirmation."
+
+    stored_otp = user.get("email_otp")
+    otp_expires_at = user.get("otp_expires_at") 
+
+    if not stored_otp or not otp_expires_at:
+        return False, "OTP not found or has an issue. Please request a new one."
+    
+    # --- FIX STARTS HERE ---
+    # Ensure otp_expires_at is a datetime object and make it timezone-aware (assuming UTC)
+    if not isinstance(otp_expires_at, datetime):
+        # This case should ideally not happen if you store datetime objects.
+        # If it's a string or timestamp, you'd need to parse it first.
+        # For example, if it was a Unix timestamp (float):
+        # otp_expires_at = datetime.fromtimestamp(otp_expires_at, timezone.utc)
+        print(f"ERROR: otp_expires_at for {email_lower} is not a datetime object from DB: {type(otp_expires_at)}")
+        return False, "Internal error with OTP expiry format. Please try again."
+
+    if otp_expires_at.tzinfo is None:
+        # If it's naive, assume it was stored as UTC and make it UTC-aware
+        otp_expires_at = otp_expires_at.replace(tzinfo=timezone.utc)
+    # --- FIX ENDS HERE ---
+
+    current_time_utc = datetime.now(timezone.utc) # Get current UTC time once
+
+    if otp_expires_at < current_time_utc:
+        # Clear expired OTP
+        users_collection.update_one({"_id": user["_id"]}, {"$unset": {"email_otp": "", "otp_expires_at": ""}})
+        return False, "OTP has expired. Please request a new one."
+
+    if stored_otp == submitted_otp:
+        users_collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {"status": STATUS_ACTIVE, "updated_at": current_time_utc}, # Use consistent current time
+                "$unset": {"email_otp": "", "otp_expires_at": ""} 
+            }
+        )
+        return True, "Email confirmed successfully! Your account is now active."
+    else:
+        return False, "Invalid OTP entered."
+
+# Also, ensure in create_user and regenerate_otp_for_user, you are consistently using timezone-aware datetimes
+# for otp_expires_at when storing them. Your current code `datetime.now(timezone.utc) + timedelta(...)`
+# correctly creates timezone-aware datetimes. The issue is likely how PyMongo retrieves them.
+
+# Consider a small helper in get_all_users_from_db and other places fetching datetimes:
+def ensure_timezone_aware(dt_obj, default_tz=timezone.utc):
+    if isinstance(dt_obj, datetime):
+        if dt_obj.tzinfo is None:
+            return dt_obj.replace(tzinfo=default_tz)
+        return dt_obj # Already aware
+    return dt_obj # Not a datetime, return as is
+
+def regenerate_otp_for_user(email):
+    """
+    Regenerates an OTP for a user whose status is 'pending_email_confirmation'.
+    Returns: (new_otp_str_or_None, message_str)
+    """
+    db = get_auth_db()
+    if db is None: return None, "Database error."
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    email_lower = email.lower()
+    
+    # Find user and ensure they are in the correct state to receive a new OTP
+    user = users_collection.find_one({"email": email_lower})
+    if not user:
+        return None, "User not found."
+    if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
+        return None, "Account is not awaiting email confirmation (e.g., already active or suspended)."
+
+    new_otp = generate_otp()
+    new_otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
+    
+    try:
+        users_collection.update_one(
+            {"_id": user["_id"]}, # Use _id for precision
+            {"$set": {
+                "email_otp": new_otp,
+                "otp_expires_at": new_otp_expiry,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        print(f"OTP regenerated for {email_lower}.")
+        return new_otp, "A new OTP has been generated."
+    except Exception as e:
+        print(f"Error regenerating OTP for {email_lower}: {e}")
+        return None, "Failed to regenerate OTP."
 
 def confirm_user_email_in_db(email):
     """Confirms a user's email and sets status to 'pending_admin_approval'."""

@@ -14,6 +14,8 @@ from backend import (
     get_user_by_email,
     verify_password,
     hard_delete_user_from_db,
+    verify_otp_and_activate_user,
+    regenerate_otp_for_user,
     # MONGO_URI, # If used directly in Flask app, else remove (backend handles its own)
     get_all_users_from_db,
     update_user_status_in_db,
@@ -202,12 +204,14 @@ def signup():
         # --- End Validations ---
 
         # create_user in backend now sets status to STATUS_PENDING_EMAIL_CONFIRMATION
-        success, message_from_backend = create_user(email, password)
+        success, message_from_backend, otp_to_send = create_user(email, password)
         
         if success:
-            token = ts.dumps(email, salt='email-confirm-salt') # Generate token
-            confirm_url = url_for('confirm_email_route', token=token, _external=True)
-            
+            if not otp_to_send: # Should not happen if success is true
+                app.logger.error(f"OTP not generated for {email} despite successful user creation call.")
+                flash("An internal error occurred during OTP generation. Please try again or contact support.", "error")
+                return redirect(url_for("signup"))
+
             email_sent_successfully = False
             for attempt in range(MAX_EMAIL_RETRIES):
                 app.logger.info(f"Attempt {attempt + 1} to send confirmation email to {email}")
@@ -215,16 +219,12 @@ def signup():
 
                 email_sent_this_attempt = send_system_email(
                     to_email=email,
-                    subject="Confirm Your Email for IntelLaw",
-                    template_name_no_ext="confirm_signup",
-                    confirm_url=confirm_url
+                    subject="Your IntelLaw Email Confirmation Code",
+                    template_name_no_ext="send_otp", # <<< NEW TEMPLATE
+                    otp_code=otp_to_send # Pass OTP to email template
                 )
-
                 if email_sent_this_attempt:
-                    email_sent_successfully = True
-                    app.logger.info(f"Confirmation email sent to {email} on attempt {attempt + 1}")
-                    print(f"EMAIL_SEND_SUCCESS: Confirmation email sent to {email} on attempt {attempt + 1}")
-                    break # Exit loop on success
+                    email_sent_successfully = True; break
                 else:
                     app.logger.warning(f"Failed to send confirmation email to {email} on attempt {attempt + 1}. Retrying in {EMAIL_RETRY_DELAY_SECONDS}s...")
                     print(f"EMAIL_SEND_FAIL: Failed attempt {attempt + 1} for {email}. Retrying...")
@@ -232,8 +232,9 @@ def signup():
                         time.sleep(EMAIL_RETRY_DELAY_SECONDS) # Wait before retrying
             
             if email_sent_successfully:
-                flash("Registration successful! A confirmation email has been sent. Please check your inbox to complete your registration.", "info")
-                return redirect(url_for("login"))
+                session["otp_confirm_email"] = email # Store email for OTP verification page
+                flash("Registration initiated! A confirmation code has been sent to your email. Please enter it below.", "info")
+                return redirect(url_for("confirm_otp_page"))
             else:
                 app.logger.error(f"Failed to send confirmation email to {email} after {MAX_EMAIL_RETRIES} attempts.")
                 print(f"EMAIL_SEND_FINAL_FAIL: All {MAX_EMAIL_RETRIES} attempts failed for {email}.")
@@ -252,6 +253,79 @@ def signup():
             
     return render_template("signup.html")
 
+@app.route("/update-email-during-otp", methods=["GET"]) # Changed endpoint name to be more descriptive
+def update_email_address_page(): # This is the function name used by url_for
+    email_for_confirmation = session.get("otp_confirm_email")
+    if not email_for_confirmation:
+        flash("Your session for email update has expired. Please try signing up again.", "warning")
+        return redirect(url_for("signup"))
+    
+    flash("The feature to update your email address at this stage is not yet implemented. If you made an error, please try signing up again with the correct email address.", "info")
+    return redirect(url_for("signup"))
+
+@app.route("/confirm-otp", methods=["GET", "POST"]) # <<< NEW ROUTE (OTP entry page)
+def confirm_otp_page():
+    email_for_confirmation = session.get("otp_confirm_email")
+    if not email_for_confirmation:
+        flash("Your session for OTP confirmation has expired or is invalid. Please start the signup process again.", "warning")
+        return redirect(url_for("signup"))
+    
+    if request.method == "POST":
+        submitted_otp = request.form.get("otp_code", "").strip() # Assuming JS combines into this hidden field
+        
+        if not submitted_otp or len(submitted_otp) != 6 or not submitted_otp.isdigit(): # Basic validation
+            flash("Please enter a valid 6-digit OTP.", "error")
+            return render_template("confirm_otp_form.html", email=email_for_confirmation)
+
+        success, message = verify_otp_and_activate_user(email_for_confirmation, submitted_otp)
+        if success:
+            session.pop("otp_confirm_email", None) # Clear session variable
+            flash(message, "success") # "Email confirmed... account is now active!"
+            # Log them in directly or redirect to login
+            # For direct login:
+            # user = get_user_by_email(email_for_confirmation)
+            # if user and user.get("status") == STATUS_ACTIVE:
+            #     session["user_email"] = user.get("email")
+            #     session["user_role"] = user.get("role")
+            #     session["user_full_name"] = user.get("full_name")
+            #     return redirect(url_for("app_frame"))
+            return redirect(url_for("login"))
+        else:
+            flash(message, "error") # "Invalid OTP", "OTP Expired"
+            # Keep them on the OTP page to try again or resend
+            return render_template("confirm_otp_form.html", email=email_for_confirmation)
+
+    return render_template("confirm_otp_form.html", email=email_for_confirmation)
+
+@app.route("/resend-otp", methods=["POST"]) # <<< NEW ROUTE
+def resend_otp():
+    email_to_resend = session.get("otp_confirm_email")
+    if not email_to_resend:
+        flash("Cannot resend OTP: Your session is invalid. Please try signing up again.", "error")
+        return redirect(url_for("signup")) 
+
+    new_otp, message_from_backend = regenerate_otp_for_user(email_to_resend)
+
+    if new_otp:
+        email_sent_successfully = False
+        for attempt in range(MAX_EMAIL_RETRIES): # Retry sending the new OTP
+            email_sent = send_system_email(
+                to_email=email_to_resend,
+                subject="Your New IntelLaw Confirmation Code",
+                template_name_no_ext="send_otp",
+                otp_code=new_otp
+            )
+            if email_sent: email_sent_successfully = True; break
+            if attempt < MAX_EMAIL_RETRIES -1 : time.sleep(EMAIL_RETRY_DELAY_SECONDS)
+        
+        if email_sent_successfully:
+            flash(f"A new confirmation code has been sent to {email_to_resend}.", "info")
+        else:
+            flash(f"Failed to resend OTP to {email_to_resend} after multiple attempts. Please try again later or contact support.", "error")
+    else:
+        flash(message_from_backend, "error") # "User not found or not awaiting confirmation" etc.
+
+    return redirect(url_for("confirm_otp_page")) # Stay on OTP entry page
 
 @app.route("/confirm_email/<token>")
 def confirm_email_route(token):
