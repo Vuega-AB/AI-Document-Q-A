@@ -229,6 +229,11 @@ def app_frame():
     return render_template("gradio_iframe.html", user_role=user_role, gradio_app_url=GRADIO_APP_URL)
 
 if __name__ == "__main__":
-    print(f"Launching Flask server for authentication and iframe on 0.0.0.0:5000...")
+    # For Render, Gunicorn will run the app. This block is for local development.
+    # Render provides the PORT environment variable.
+    port = int(os.environ.get("PORT", 5000)) # Use PORT set by Render or 5000 locally
+    print(f"Launching Flask server for authentication and iframe on 0.0.0.0:{port}...")
     print(f"Gradio app is expected to be running at: {GRADIO_APP_URL}")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # When run with 'python main_flask_server.py', debug=True is fine.
+    # Gunicorn will handle production, so debug=True here is less of a concern for deployment.
+    app.run(host="0.0.0.0", port=port, debug=True)

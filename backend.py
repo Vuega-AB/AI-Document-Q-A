@@ -362,23 +362,35 @@ def load_data_from_selected_db(selected_db):
         print("Error: Embedding model not initialized. Cannot load data.")
         return "Embedding model not initialized. Load failed."
 
-    faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
+    # Initialize fresh, empty structures
+    # Ensure embedding_model.get_sentence_embedding_dimension() returns a valid integer
+    try:
+        dimension = embedding_model.get_sentence_embedding_dimension()
+        if not isinstance(dimension, int) or dimension <= 0:
+            raise ValueError(f"Invalid embedding dimension: {dimension}")
+        faiss_index = faiss.IndexFlatL2(dimension)
+    except Exception as e:
+        print(f"Critical error initializing FAISS index with dimension: {e}")
+        return f"Critical error initializing FAISS index: {e}. Load failed."
+
     text_store = []
     alert_msg = ""
+    temp_idx_file_path = None # To ensure it's defined for finally block
 
     if selected_db == "Dropbox":
+        # ... (your existing Dropbox code - ensure it also handles faiss.read_index errors robustly) ...
         if dbx is None: initialize_dropbox_client()
         if dbx is None: alert_msg = "Dropbox not initialized. Cannot load."; return alert_msg
         try:
+            temp_idx_file_path = "temp_faiss_from_dropbox.index"
             _, res_index = dbx.files_download(path=INDEX_FILE_DROPBOX)
-            temp_idx_file = "temp_faiss_from_dropbox.index"
-            with open(temp_idx_file, "wb") as f: f.write(res_index.content)
-            loaded_index = faiss.read_index(temp_idx_file)
+            with open(temp_idx_file_path, "wb") as f: f.write(res_index.content)
+            loaded_index = faiss.read_index(temp_idx_file_path)
             if loaded_index.d == faiss_index.d:
                 faiss_index = loaded_index
             else:
-                alert_msg += f"Warning: Dropbox index dimension mismatch ({loaded_index.d} vs {faiss_index.d}). Not loading index. "
-            os.remove(temp_idx_file)
+                alert_msg += f"Warning: Dropbox index dimension mismatch ({loaded_index.d} vs {faiss_index.d}). Not loading. "
+            # os.remove(temp_idx_file_path) # Moved to finally
 
             _, res_text = dbx.files_download(path=TEXT_FILE_DROPBOX)
             text_store = json.loads(res_text.content.decode('utf-8'))
@@ -387,39 +399,91 @@ def load_data_from_selected_db(selected_db):
             if isinstance(e.error, dropbox.files.DownloadError) and e.error.is_path() and e.error.get_path().is_not_found():
                 alert_msg += "No existing data on Dropbox. Initialized empty store."
             else: alert_msg += f"Dropbox API error: {e}"
+        except RuntimeError as faiss_error: # Catch FAISS read errors
+            alert_msg += f"Error reading FAISS index from Dropbox: {faiss_error}. Index likely corrupt. Re-initializing. "
+            # faiss_index remains the newly initialized empty one
         except Exception as e: alert_msg += f"Error loading from Dropbox: {e}"
+        finally:
+            if temp_idx_file_path and os.path.exists(temp_idx_file_path):
+                os.remove(temp_idx_file_path)
+
 
     elif selected_db == "MongoDB":
-        if mongo_db_obj is None: initialize_mongodb_client() 
+        if mongo_db_obj is None: initialize_mongodb_client()
         if mongo_db_obj is None: alert_msg = "MongoDB not initialized for app data. Cannot load."; return alert_msg
+        
+        index_doc = None # Define before try block
         try:
             index_doc = mongo_db_obj[FAISS_COLLECTION_NAME].find_one({"_id": "main_faiss_index"})
-            if index_doc and "index_data" in index_doc:
-                temp_idx_file = "temp_faiss_from_mongo.idx"
-                with open(temp_idx_file, "wb") as f: f.write(index_doc["index_data"])
-                loaded_index = faiss.read_index(temp_idx_file)
-                if loaded_index.d == faiss_index.d:
+            if index_doc and "index_data" in index_doc and index_doc["index_data"]: # Check if index_data exists and is not empty
+                temp_idx_file_path = "temp_faiss_from_mongo.idx"
+                with open(temp_idx_file_path, "wb") as f: f.write(index_doc["index_data"])
+                
+                # Before attempting to read, check if file has content
+                if os.path.getsize(temp_idx_file_path) == 0:
+                    raise RuntimeError("Temporary FAISS index file is empty after writing from MongoDB data.")
+
+                loaded_index = faiss.read_index(temp_idx_file_path) # This is where the error occurs
+                if loaded_index.d == faiss_index.d: # faiss_index is the newly initialized one
                     faiss_index = loaded_index
+                    # alert_msg += f"FAISS index loaded from MongoDB. Dim: {faiss_index.d}, Vectors: {faiss_index.ntotal}. " # Becomes too verbose
                 else:
-                    alert_msg += f"Warning: MongoDB index dimension mismatch ({loaded_index.d} vs {faiss_index.d}). Not loading index. "
-                os.remove(temp_idx_file)
-            
+                    alert_msg += f"Warning: MongoDB index dimension mismatch ({loaded_index.d} vs {faiss_index.d}). Not loading. "
+            else:
+                 alert_msg += "No FAISS index data found or data is empty in MongoDB. "
+        
+        except RuntimeError as faiss_error: # Catch FAISS-specific runtime errors
+            alert_msg += f"Error reading FAISS index from MongoDB data: {faiss_error}. Index is likely corrupt. "
+            if index_doc and "_id" in index_doc: # If we know the document ID that caused the error
+                try:
+                    delete_result = mongo_db_obj[FAISS_COLLECTION_NAME].delete_one({"_id": index_doc["_id"]})
+                    if delete_result.deleted_count > 0:
+                        alert_msg += "Corrupted FAISS index document deleted from MongoDB. "
+                    else:
+                        alert_msg += "Attempted to delete corrupted index, but document not found (or already deleted). "
+                except Exception as db_del_err:
+                    alert_msg += f"Error trying to delete corrupted index from MongoDB: {db_del_err}. "
+            else:
+                alert_msg += "Cannot identify specific MongoDB document for corrupted index to delete. "
+            # faiss_index remains the newly initialized empty one
+        except Exception as e: # Catch other general errors during index loading phase
+            alert_msg += f"General error during MongoDB FAISS index loading: {e}. "
+        finally:
+            if temp_idx_file_path and os.path.exists(temp_idx_file_path):
+                os.remove(temp_idx_file_path)
+
+        # Load text_store regardless of index success/failure
+        try:
             text_docs = list(mongo_db_obj[TEXT_STORE_COLLECTION_NAME].find({}))
             text_store = [{k: v for k, v in doc.items() if k != '_id'} for doc in text_docs]
-            alert_msg += f"Data loaded from MongoDB. {len(text_store)} text items, index has {faiss_index.ntotal} vectors."
-            if not index_doc and not text_docs and not alert_msg: # if no error, and no data
-                alert_msg = "No existing data on MongoDB. Initialized empty store."
-        except Exception as e: alert_msg += f"Error loading from MongoDB: {e}"
-    
-    if faiss_index.ntotal > 0 and not text_store:
-        alert_msg += " Warning: Index has vectors but text store is empty. Data might be corrupt. Clearing index."
+            alert_msg += f"Loaded {len(text_store)} text items from MongoDB. "
+        except Exception as e:
+            alert_msg += f"Error loading text_store from MongoDB: {e}. "
+            text_store = [] # Ensure text_store is empty on error
+
+        # Final status message construction
+        if faiss_index.ntotal > 0:
+            alert_msg += f"Final Index: {faiss_index.ntotal} vectors. "
+        else:
+            alert_msg += f"Final Index: Empty. "
+
+        if not (index_doc and "index_data" in index_doc and index_doc["index_data"]) and not text_docs:
+             if "No FAISS index data found" in alert_msg and "0 text items" in alert_msg: # Check if already handled
+                pass # Message likely already comprehensive
+             else:
+                alert_msg += "Initialized empty store as no data found in MongoDB. "
+
+
+    # Consistency checks (these are good to keep)
+    if faiss_index.ntotal > 0 and not text_store and "corrupt" not in alert_msg.lower():
+        alert_msg += " Warning: Index has vectors but text store is empty. Data might be inconsistent. Clearing index to be safe."
         faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
-    elif not faiss_index.ntotal and text_store: # Index empty but text_store has data
-        alert_msg += " Warning: Text store loaded but index is empty/failed to load. Consider re-indexing or checking data integrity."
+    elif faiss_index.ntotal == 0 and text_store and ("corrupt" not in alert_msg.lower() and "mismatch" not in alert_msg.lower()):
+        alert_msg += " Warning: Text store loaded but index is empty/failed to load. Consider re-indexing. "
 
-
-    print(f"Load attempt for {selected_db}: {alert_msg}")
-    return alert_msg if alert_msg else "Data loaded successfully. Store might be empty."
+    final_status_message = f"DB Load Status ({selected_db}): {alert_msg.strip()}"
+    print(final_status_message)
+    return final_status_message
 
 # --- PDF Processing ---
 # ... (existing: chunk_text, extract_text_from_pdf_bytes, process_and_add_pdf_core) ...
