@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in to IntelLaw</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            /* Gradient Background: Black -> Gray -> White */
+            background: linear-gradient(to bottom right, #000000, #434343, #f5f5f5); /* Adjust stops as needed */
+            background-size: cover; 
+            background-position: center center; 
+            background-repeat: no-repeat; 
+            background-attachment: fixed; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .login-container {
+            background-color: rgba(255, 255, 255, 0.95); /* Slightly more opaque white for contrast */
+            padding: 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25); 
+            width: 100%;
+            max-width: 380px; 
+            box-sizing: border-box;
+            backdrop-filter: blur(3px); 
+            -webkit-backdrop-filter: blur(3px);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px; 
+        }
+
+        .login-header h1 {
+            font-size: 24px; 
+            font-weight: 600;
+            color: #111827; 
+            margin: 0;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px; 
+            color: #1f2937; 
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px 16px; 
+            border: 1px solid #d1d5db; 
+            border-radius: 8px; 
+            box-sizing: border-box;
+            font-size: 16px;
+            background-color: #ffffff; 
+            color: #111827;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #374151; /* Dark gray focus border */
+            box-shadow: 0 0 0 3px rgba(55, 65, 81, 0.2); /* Dark gray focus ring */
+        }
+
+        .submit-btn {
+            width: 100%;
+            background-color: #111827; /* Black button */
+            color: white;
+            padding: 12px;
+            border: none;
+            border-radius: 8px; 
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        .submit-btn:hover {
+            background-color: #374151; /* Darker gray on hover */
+        }
+
+        .error-message {
+            color: #b91c1c; 
+            background-color: #fee2e2; 
+            border: 1px solid #fca5a5; 
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .footer-text {
+            text-align: center;
+            margin-top: 24px;
+            font-size: 14px;
+            color: #4b5563; /* Adjusted for readability on potentially darker gradient areas */
+        }
+
+        .footer-text a {
+            color: #1f2937; /* Dark gray for link, good contrast */
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer-text a:hover {
+            text-decoration: underline;
+            color: #000000;
+        }
+         /* Flash message general styling for categories other than error */
+        .flash-message {
+            padding:10px;
+            border-radius:6px;
+            text-align:center;
+            margin-bottom:20px;
+            font-size:14px
+        }
+        .flash-message.success {
+            color: #047857; /* Dark green */
+            background-color: #d1fae5; /* Light green */
+            border: 1px solid #a7f3d0;
+        }
+        .flash-message.info { /* For pending activation message, etc. */
+            color: #1e40af; /* Dark blue */
+            background-color: #eff6ff; /* Light blue */
+            border: 1px solid #bfdbfe;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>Sign in to IntelLaw</h1>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <p class="flash-message {% if category == 'error' %}error-message{% else %}{{ category }}{% endif %}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="input-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="Enter Your Email" required>
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter Your Password" required>
+            </div>
+            <button type="submit" class="submit-btn">Sign in</button>
+        </form>
+
+        <div class="footer-text">
+            Don't have an account? <a href="{{ url_for('signup') }}">Sign up</a>
+        </div>
+    </div>
+</body>
+</html>
