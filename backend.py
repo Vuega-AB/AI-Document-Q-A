@@ -243,24 +243,47 @@ def set_user_totp_secret(email, totp_secret):
 def enable_user_2fa(email, hashed_recovery_codes):
     """Enables 2FA for the user, stores hashed recovery codes, and marks initial login as complete."""
     db = get_auth_db()
-    if not db: return False, "Database error."
+    if db is None:  # <<< CORRECTED CHECK
+        print("Error: Auth DB not available in enable_user_2fa.")
+        return False, "Database connection error. Failed to enable 2FA."
+    
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    user = users_collection.find_one({"email": email.lower()})
-    if not user or not user.get("totp_secret"):
-        return False, "Cannot enable 2FA: TOTP secret not set up."
+    email_lower = email.lower() # Ensure consistent casing
+    user = users_collection.find_one({"email": email_lower})
 
-    result = users_collection.update_one(
-        {"email": email.lower()},
-        {"$set": {
-            "is_2fa_enabled": True,
-            "recovery_codes": hashed_recovery_codes,
-            "used_recovery_codes": [],
-            "has_completed_initial_login": True, # << MARK AS COMPLETED HERE TOO
-            "updated_at": datetime.now(timezone.utc)
-        }}
-    )
-    return result.modified_count > 0, "2FA enabled successfully." if result.modified_count > 0 else "Failed to enable 2FA."
+    if not user: # Added check for user existence
+        print(f"Error: User {email_lower} not found in enable_user_2fa.")
+        return False, "User not found. Cannot enable 2FA."
+        
+    if not user.get("totp_secret"): # Prerequisite check
+        print(f"Error: TOTP secret not set for {email_lower} before enabling 2FA.")
+        return False, "Cannot enable 2FA: Critical setup step (TOTP secret) missing."
 
+    try:
+        result = users_collection.update_one(
+            {"email": email_lower}, # Use email_lower here too
+            {"$set": {
+                "is_2fa_enabled": True,
+                "recovery_codes": hashed_recovery_codes,
+                "used_recovery_codes": [], # Reset used codes
+                "has_completed_initial_login": True, 
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        if result.modified_count > 0:
+            print(f"2FA enabled for user {email_lower}.")
+            return True, "2FA enabled successfully."
+        elif result.matched_count > 0 and user.get("is_2fa_enabled") is True: # Already enabled with same codes?
+            print(f"2FA was already enabled for {email_lower}, considered success.")
+            return True, "2FA was already enabled." # Or a more specific message
+        else:
+            print(f"Failed to enable 2FA for {email_lower}. Matched: {result.matched_count}, Modified: {result.modified_count}")
+            return False, "Failed to update record to enable 2FA."
+            
+    except Exception as e:
+        print(f"Database error in enable_user_2fa for {email_lower}: {e}")
+        return False, "Database operation error during 2FA enabling."
+    
 def disable_user_2fa(email):
     """Disables 2FA for the user."""
     db = get_auth_db()
