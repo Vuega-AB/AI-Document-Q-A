@@ -1,0 +1,28 @@
+{% extends "base_auth.html" %} {# Or your base auth template #}
+{% block title %}Two-Factor Authentication{% endblock %}
+{% block content %}
+<div class="container auth-container"> {# Use your existing auth styles #}
+    <h2>Two-Factor Authentication</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <p>An authentication code has been sent to your authenticator app.</p>
+    <form method="POST" action="{{ url_for('login_2fa_page') }}">
+        <div class="form-group">
+            <label for="totp_code">Authentication Code</label>
+            <input type="text" class="form-control" id="totp_code" name="totp_code" 
+                   required autofocus autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Verify Code</button>
+        <hr>
+        <p class="text-center">
+            <button type="submit" name="use_recovery_code" value="1" class="btn btn-link">Use a recovery code instead</button>
+        </p>
+    </form>
+    <p class="text-center mt-3"><a href="{{ url_for('logout') }}">Cancel and Logout</a></p>
+</div>
+{% endblock %}

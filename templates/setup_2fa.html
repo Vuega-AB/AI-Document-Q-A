@@ -1,0 +1,33 @@
+{% extends "base_auth.html" %} {# Or your main app base template #}
+{% block title %}Setup Two-Factor Authentication{% endblock %}
+{% block content %}
+<div class="container mt-4"> {# Or your standard page container #}
+    <h2>Setup Two-Factor Authentication</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <p>1. Scan the QR code below with your authenticator app (e.g., Google Authenticator, Authy).</p>
+    <div class="text-center my-3">
+        <img src="{{ qr_code_data_url }}" alt="2FA QR Code" style="border: 1px solid #ccc; padding: 5px; max-width: 250px; height: auto;">
+    </div>
+    <p>If you cannot scan the QR code, you can manually enter this secret key into your app:
+        <br><strong><code>{{ otp_secret_display }}</code></strong>
+    </p>
+    <hr>
+    <p>2. After adding the account to your authenticator app, enter the 6-digit code it generates below to verify and complete setup.</p>
+    <form method="POST" action="{{ url_for('setup_2fa_page') }}">
+        <div class="form-group">
+            <label for="totp_code">Verification Code</label>
+            <input type="text" class="form-control" id="totp_code" name="totp_code" 
+                   required autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*" maxlength="6">
+        </div>
+        <button type="submit" class="btn btn-primary">Verify & Enable 2FA</button>
+        <a href="{{ url_for('profile_page') }}" class="btn btn-secondary ml-2">Cancel</a>
+    </form>
+</div>
+{% endblock %}
