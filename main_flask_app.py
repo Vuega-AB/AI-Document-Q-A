@@ -24,16 +24,13 @@ from backend import (
     get_full_user_for_auth,
     # MONGO_URI, # If used directly in Flask app, else remove (backend handles its own)
     get_all_users_from_db,
-    set_user_totp_secret, enable_user_2fa, disable_user_2fa, verify_totp_code,
-    generate_recovery_codes, hash_recovery_code, verify_recovery_code,
+    set_user_totp_secret, enable_user_2fa, verify_totp_code,
     update_user_status_in_db,
-    mark_initial_login_complete,
     # confirm_user_email_in_db, # <<< ADDED
     STATUS_PENDING_EMAIL_CONFIRMATION,
     STATUS_ACTIVE,
-    STATUS_SUSPENDED, # Ensure this is defined in backend if used in dropdown
-    STATUS_DEACTIVATED,  # Ensure this is defined in backend
-    ADMIN_USERS_COLLECTION_NAME 
+    STATUS_SUSPENDED
+
 )
 
 load_dotenv()
@@ -44,20 +41,11 @@ GRADIO_APP_URL = os.getenv("GRADIO_APP_URL", "http://localhost:7860")
 FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
 
 if not FLASK_SECRET_KEY:
-    # For development, we can use a hardcoded default, but WARN LOUDLY.
-    # In a real production environment, this should cause the app to fail to start
-    # or use a securely generated key.
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    print("!!! WARNING: FLASK_SECRET_KEY is not set in .env.          !!!")
-    print("!!! Using a default, insecure key for development.         !!!")
-    print("!!! THIS IS NOT SAFE FOR PRODUCTION. Set a strong secret key!  !!!")
-    print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     FLASK_SECRET_KEY = "dev_default_unsafe_secret_key_CHANGE_ME_IMMEDIATELY"
-    # raise ValueError("CRITICAL: FLASK_SECRET_KEY is not set in the environment. This is required for security.")
 
 
 app = Flask(__name__, template_folder="templates")
-app.secret_key = FLASK_SECRET_KEY # CRITICAL for session security and token signing
+app.secret_key = FLASK_SECRET_KEY
 
 # Flask-Mail Configuration
 app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.googlemail.com')
@@ -87,39 +75,56 @@ def run_flask_app_initializations():
 
 run_flask_app_initializations()
 
+# main_flask_app.py
+
 def require_login(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if "force_2fa_setup_email" in session and request.endpoint not in ['setup_2fa_page', 'logout', 'static']:
-            # If they are being forced to setup 2FA, keep them on that page
-            # unless they are trying to log out or access static assets.
-            flash("Please complete 2FA setup to continue.", "warning")
-            return redirect(url_for('setup_2fa_page'))
+        current_endpoint = request.endpoint
+        
+        if "force_2fa_setup_email" in session:
+            allowed_endpoints_during_forced_setup = ['setup_2fa_page', 'logout', 'static']
+            if current_endpoint in allowed_endpoints_during_forced_setup:
+                print(f"DEBUG [@require_login]: FORCED 2FA. Allowing endpoint: {current_endpoint}")
+                return f(*args, **kwargs) # <<< ALLOWS setup_2fa_page TO RUN
+            else:
+                flash("Please complete Two-Factor Authentication setup to continue.", "warning")
+                print(f"DEBUG [@require_login]: FORCED 2FA. Denied endpoint: {current_endpoint}. Redirecting to setup.")
+                return redirect(url_for('setup_2fa_page', new="true")) # Keep them on setup
+
+        if "2fa_login_email" in session: # No need to check session.get("user_email") == session.get("2fa_login_email") here
+            allowed_endpoints_during_2fa_challenge = ['login_2fa_page', 'resend_otp', 'logout', 'static']
+            if current_endpoint in allowed_endpoints_during_2fa_challenge:
+                print(f"DEBUG [@require_login]: 2FA CHALLENGE. Allowing endpoint: {current_endpoint}")
+                return f(*args, **kwargs)
+            else:
+                flash("Please complete your 2FA login.", "info")
+                print(f"DEBUG [@require_login]: 2FA CHALLENGE. Denied endpoint: {current_endpoint}. Redirecting to 2FA login.")
+                return redirect(url_for('login_2fa_page'))
 
         if "user_email" not in session:
             flash("Please log in to access this page.", "info")
+            print(f"DEBUG [@require_login]: NO SESSION (user_email). Denied endpoint: {current_endpoint}. Redirecting to login.")
             return redirect(url_for('login', next=request.url))
-        
-        if "2fa_login_email" in session and session.get("2fa_login_email") == session.get("user_email") \
-           and request.endpoint not in ['login_2fa_page', 'logout', 'static', 'resend_otp']: # Allow resend_otp
-            # If in 2FA challenge, keep them on 2FA page
-            flash("Please complete your 2FA login.", "info")
-            return redirect(url_for('login_2fa_page'))
-
-        user_for_check = get_full_user_for_auth(session["user_email"]) # Use full auth to check 2FA status
+        user_for_check = get_full_user_for_auth(session["user_email"])
         if not user_for_check:
-            session.clear(); flash("Session invalid.", "error"); return redirect(url_for('login'))
+            session.clear(); flash("Session invalid (user not found).", "error"); return redirect(url_for('login'))
         
         if user_for_check.get("status") != STATUS_ACTIVE:
-            session.clear(); flash("Account not active.", "error"); return redirect(url_for('login'))
+            session.clear(); flash(f"Account not active.", "warning"); return redirect(url_for('login'))
         
-        # If 2FA IS enabled but they somehow got past the 2FA login page without completing it (e.g. stale session)
-        # AND they are not the user currently in the 2fa_login_email flow.
-        if user_for_check.get("is_2fa_enabled") and "2fa_login_email" not in session:
-            session["2fa_login_email"] = session["user_email"] # Re-initiate 2FA flow
-            flash("2FA verification required.", "info")
-            return redirect(url_for("login_2fa_page"))
+        if user_for_check.get("is_2fa_enabled") and not session.get("2fa_verified_this_session"):
+            allowed_endpoints_before_2fa_verify = [
+                'setup_2fa_page', 
+                'login_2fa_page', 'resend_otp', 'logout', 'static' # Ensure all 2FA management and escape routes are here
+            ]
+            if current_endpoint not in allowed_endpoints_before_2fa_verify:
+                session["2fa_login_email"] = session["user_email"] 
+                flash("Two-Factor Authentication verification required for this page.", "info")
+                print(f"DEBUG [@require_login]: SESSION OK, 2FA enabled but not verified. Endpoint: {current_endpoint}. Redirecting to 2FA login.")
+                return redirect(url_for("login_2fa_page"))
             
+        print(f"DEBUG [@require_login]: Access GRANTED to endpoint: {current_endpoint} for user {session['user_email']}")
         return f(*args, **kwargs)
     return decorated_function
 
@@ -136,9 +141,6 @@ def get_name_initials(name_str):
 
 def format_datetime_for_display(dt_obj):
     if isinstance(dt_obj, datetime):
-        # Ensure datetime is timezone-aware or consistently handled before display
-        # If dt_obj might be naive, you might want to localize it or assume UTC
-        # For simplicity, assuming backend provides timezone-aware or consistently naive UTC datetimes
         return dt_obj.strftime("%b %d, %Y, %I:%M %p")
     elif dt_obj is None:
         return "N/A"
@@ -151,7 +153,6 @@ def send_system_email(to_email, subject, template_name_no_ext, **kwargs):
         print(f"MAIL ERROR: Mail server not configured. Cannot send '{subject}' to {to_email}.")
         return False
     try:
-        # Ensure app_name or similar is passed for templates if they use it
         kwargs.setdefault('app_name', 'IntelLaw') # Default app_name if not provided
         html_body = render_template(f"email/{template_name_no_ext}.html", **kwargs)
         text_body = render_template(f"email/{template_name_no_ext}.txt", **kwargs)
@@ -168,15 +169,18 @@ def send_system_email(to_email, subject, template_name_no_ext, **kwargs):
 @app.route("/")
 def index(): # ... (Logic based on status and 2FA session state)
     if "user_email" in session:
+        if "force_2fa_setup_email" in session:
+            print("IN INDEX TO setup_2fa_page ")
+            return redirect(url_for("setup_2fa_page"))
+        
         if "2fa_login_email" in session and session["2fa_login_email"] == session.get("user_email"):
             return redirect(url_for("login_2fa_page")) # Mid-2FA login
 
         user = get_user_by_email(session["user_email"])
-        if not user: session.clear(); flash("Session invalid.", "error"); return redirect(url_for("login"))
-
+        # if not user: session.clear(); flash("Session invalid.", "error"); return redirect(url_for("login"))
         if user.get("status") == STATUS_ACTIVE:
             return redirect(url_for("app_frame"))
-        else: # PENDING_EMAIL_CONFIRMATION or SUSPENDED
+        else:
             session.clear() 
             flash("Account requires attention. Please log in.", "info")
             return redirect(url_for("login"))
@@ -187,6 +191,7 @@ def index(): # ... (Logic based on status and 2FA session state)
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if "user_email" in session and "2fa_login_email" not in session and "force_2fa_setup_email" not in session:
+        print("IAM IN THE LOGIN FUNCTION, GOING TO INDEX")
         return redirect(url_for("index"))
 
     if request.method == "POST":
@@ -207,45 +212,31 @@ def login():
                 flash("Email not confirmed. Enter OTP sent to your email.", "warning")
                 return redirect(url_for("confirm_otp_page"))
             elif user_status == STATUS_SUSPENDED:
-                flash("Account suspended. Contact support.", "warning")
-                return render_template("login.html", email=email) # Stay on login or redirect to specific suspended page
+                return redirect(url_for("pending_activation")) 
             elif user_status != STATUS_ACTIVE: # Any other non-active status
                 flash(f"Account status '{user_status}' prevents login. Contact support.", "error")
                 return render_template("login.html", email=email)
-
-            # If we reach here, user_status IS STATUS_ACTIVE
-
-            # Now, handle 2FA logic for active users
-            is_2fa_user_enabled = db_user_for_login.get("is_2fa_enabled") is True # Explicit check for True
             
-            # Specific bypass for APP_ADMIN_EMAIL if 2FA is enabled for them
-            is_app_admin_bypassing_2fa = (email == APP_ADMIN_EMAIL and is_2fa_user_enabled)
+            is_2fa_user_enabled = db_user_for_login.get("is_2fa_enabled") is True 
+            is_app_admin_bypassing_2fa = (email == APP_ADMIN_EMAIL)
+            has_user_completed_initial_login = db_user_for_login.get("has_completed_initial_login") is True
 
-            if is_2fa_user_enabled and not is_app_admin_bypassing_2fa:
-                # User has 2FA enabled and is NOT the APP_ADMIN_EMAIL (or APP_ADMIN_EMAIL isn't bypassing)
+            if not is_app_admin_bypassing_2fa:
                 session["2fa_login_email"] = email 
-                flash("Please enter your 2FA code.", "info")
                 print(f"DEBUG: User {email} (Role: {user_role}) is ACTIVE & 2FA enabled. Redirecting to 2FA page.")
-                return redirect(url_for("login_2fa_page"))
-            else:
-                # Either 2FA is not enabled OR it's the APP_ADMIN_EMAIL bypassing their 2FA
-                if is_app_admin_bypassing_2fa:
-                    print(f"DEBUG: APP_ADMIN_EMAIL ({email}) logged in, bypassing 2FA prompt (2FA status: {is_2fa_user_enabled}).")
-                    session["2fa_verified_this_session"] = True # Mark as verified for this session
-
-                # Check for forced 2FA setup for users who don't have 2FA enabled yet
-                # (and are not the APP_ADMIN_EMAIL if you want to exclude them from forced setup)
-                if not is_2fa_user_enabled and \
-                   not db_user_for_login.get("has_completed_initial_login") and \
-                   email != APP_ADMIN_EMAIL: # Example: Don't force 2FA setup on APP_ADMIN
-
+                
+                if not has_user_completed_initial_login:
+                    print(f"DEBUG: User {email} has not completed initial login. Redirecting to 2FA setup page.")
                     session["force_2fa_setup_email"] = email
                     session["user_email_pre_2fa_force"] = email
-                    flash("For enhanced security, please set up Two-Factor Authentication.", "info")
-                    print(f"DEBUG: User {email} (Role: {user_role}) is ACTIVE, no 2FA, first login. Forcing 2FA setup.")
-                    return redirect(url_for("setup_2fa_page"))
-                else:
-                    # Normal login: 2FA not enabled (and not first login for forced setup), or APP_ADMIN bypass.
+                    return redirect(url_for("setup_2fa_page", new="true")) 
+                
+                return redirect(url_for("login_2fa_page"))
+            else:
+                if is_app_admin_bypassing_2fa:
+                    print(f"DEBUG: APP_ADMIN_EMAIL ({email}) logged in, bypassing 2FA prompt (2FA status: {is_2fa_user_enabled}).")
+                    session["2fa_verified_this_session"] = True
+
                     print(f"DEBUG: User {email} (Role: {user_role}) logging in. 2FA enabled: {is_2fa_user_enabled}, Bypassed: {is_app_admin_bypassing_2fa}, Initial Login Completed: {db_user_for_login.get('has_completed_initial_login')}")
                     session["user_email"] = email
                     session["user_role"] = user_role # Use role fetched earlier
@@ -271,7 +262,6 @@ def signup():
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
 
-        # --- Validations ---
         if not email or not password or not confirm_password:
             flash("All fields are required.", "error")
             return render_template("signup.html", email=email), 400
@@ -284,9 +274,7 @@ def signup():
         if len(password) < 6: # Basic password length check
             flash("Password must be at least 6 characters long.", "error")
             return render_template("signup.html", email=email), 400
-        # --- End Validations ---
 
-        # create_user in backend now sets status to STATUS_PENDING_EMAIL_CONFIRMATION
         success, message_from_backend, otp_to_send = create_user(email, password)
         
         if success:
@@ -322,21 +310,12 @@ def signup():
                 app.logger.error(f"Failed to send confirmation email to {email} after {MAX_EMAIL_RETRIES} attempts.")
                 print(f"EMAIL_SEND_FINAL_FAIL: All {MAX_EMAIL_RETRIES} attempts failed for {email}.")
                 flash("Registration was successful, but we failed to send a confirmation email even after multiple attempts. Please contact support. Your account is created but requires manual email verification assistance.", "error")
-                # Consider what to do here:
-                # 1. Leave user as pending_email_confirmation. Admin might need to intervene or user contacts support.
-                # 2. Optionally, delete the user record if email confirmation is absolutely critical and cannot be sent.
-                #    (This would require a backend.delete_user_if_pending_email_confirmation(email) function)
-                #    If deleting, ensure the user is informed their registration was not fully completed.
-                #
-                # For now, we'll leave the user record as is and redirect.
                 return redirect(url_for("login")) # Or a specific error page
         else:
-            flash(message_from_backend, "error") # E.g., "Email already registered..." or "DB error"
+            flash(message_from_backend, "error")
             return render_template("signup.html", email=email), 400
             
     return render_template("signup.html")
-
-# main_flask_app.py
 
 @app.route("/login/2fa", methods=["GET", "POST"])
 def login_2fa_page():
@@ -387,170 +366,159 @@ def login_2fa_page():
             # Stay on 2FA page to allow another attempt
     return render_template("login_2fa.html", email=email_for_2fa)
 
-# main_flask_app.py
-@app.route("/profile")
-@require_login
-def profile_page():
-    user_for_profile = get_user_by_email(session["user_email"]) # This is fine as it gets 'is_2fa_enabled'
-    if not user_for_profile: return redirect(url_for("logout"))
-    return render_template("profile.html", user=user_for_profile)
+# # main_flask_app.py
+# @app.route("/profile")
+# @require_login
+# def profile_page():
+#     user_for_profile = get_user_by_email(session["user_email"]) # This is fine as it gets 'is_2fa_enabled'
+#     if not user_for_profile: return redirect(url_for("logout"))
+#     return render_template("profile.html", user=user_for_profile)
 
-@app.route("/profile/2fa/setup", methods=["GET", "POST"])
-# @require_login # The new require_login will handle the "force_2fa_setup_email" state
+
+@app.route("/2fa/setup", methods=["GET", "POST"])
+@require_login 
 def setup_2fa_page():
-    # Determine if this is a forced setup or a voluntary one
+    print("IAM IN THE setup_2fa_page FUNCTION")
     is_forced_setup = "force_2fa_setup_email" in session
     current_user_email = session.get("force_2fa_setup_email") or session.get("user_email")
 
     if not current_user_email:
-        flash("User context not found for 2FA setup.", "error")
+        flash("User session not found for 2FA setup. Please log in.", "error")
         return redirect(url_for("login"))
 
-    # Fetch full user doc for checks
     db_user = get_full_user_for_auth(current_user_email)
     if not db_user:
-        flash("User not found.", "error"); session.clear(); return redirect(url_for("login"))
+        flash("User not found in database.", "error")
+        session.clear()
+        return redirect(url_for("login"))
     
-    # If already enabled and not a forced setup, redirect to profile
     if db_user.get("is_2fa_enabled") and not is_forced_setup:
-        flash("2FA is already enabled.", "info"); return redirect(url_for("profile_page"))
+        flash("Two-Factor Authentication is already enabled for your account.", "info")
+        return redirect(url_for("2fa_login_page"))
 
-    if request.method == "POST" and request.form.get("totp_code"):
-        submitted_code = request.form.get("totp_code").strip()
-        totp_secret_to_verify = session.get("2fa_setup_secret") # Get temp secret
-        current_user_email = session.get("force_2fa_setup_email") or session.get("user_email")
-        print(f"DEBUG User: {current_user_email}")
-        print(f"DEBUG Submitted Code: '{submitted_code}'")
-        print(f"DEBUG Secret from Session: '{totp_secret_to_verify}'")
+    if request.method == "POST":
+        submitted_code = request.form.get("totp_code", "").strip()
+        totp_secret_to_verify = session.get("2fa_setup_secret")
 
-        if not totp_secret_to_verify: # Session expired or tampered
-            flash("2FA setup session expired. Please start over.", "error")
-            session.pop("force_2fa_setup_email", None) # Clear force flag too
-            session.pop("user_email_pre_2fa_force", None)
-            return redirect(url_for("setup_2fa_page", new="true"))
-            # Temporarily generate what the server expects, for comparison
-        try:
-            totp_server = pyotp.TOTP(totp_secret_to_verify)
-            server_expected_code_now = totp_server.now()
-            print(f"DEBUG Server Expected Code (now): '{server_expected_code_now}'")
-            # You can also check codes for adjacent windows if valid_window > 0
-            # print(f"DEBUG Server Expected Code (at -30s): '{totp_server.at(datetime.now(timezone.utc) - timedelta(seconds=30))}'")
-            # print(f"DEBUG Server Expected Code (at +30s): '{totp_server.at(datetime.now(timezone.utc) + timedelta(seconds=30))}'")
-        except Exception as e:
-            print(f"DEBUG Error generating server expected code: {e}")
+        if not totp_secret_to_verify:
+            flash("2FA setup session expired. Please scan the QR code and try again.", "error")
+            if is_forced_setup:
+                session.pop("force_2fa_setup_email", None)
+                session.pop("user_email_pre_2fa_force", None)
+            session.pop("2fa_setup_secret", None)
+            return redirect(url_for("setup_2fa_page", new="true")) 
 
-
-        is_code_valid = verify_totp_code(totp_secret_to_verify, submitted_code) # This is your backend call
-        print(f"DEBUG verify_totp_code (backend) returned: {is_code_valid}")
-
-        if verify_totp_code(totp_secret_to_verify, submitted_code):
+        if not submitted_code:
+             flash("Verification code cannot be empty.", "error")
+        
+        elif verify_totp_code(totp_secret_to_verify, submitted_code):
             set_ok, _ = set_user_totp_secret(current_user_email, totp_secret_to_verify)
             if not set_ok:
-                flash("Failed to save 2FA configuration. Try again.", "error")
+                flash("Failed to save 2FA configuration. Please try again.", "error")
                 return redirect(url_for("setup_2fa_page", new="true"))
             
-            plain_recovery_codes = generate_recovery_codes()
-            hashed_recovery_codes = [hash_recovery_code(code) for code in plain_recovery_codes]
-            # enable_user_2fa now also sets has_completed_initial_login to True
-            enable_ok, enable_msg = enable_user_2fa(current_user_email, hashed_recovery_codes)
+            enable_ok, enable_msg = enable_user_2fa(current_user_email) 
             
             if enable_ok:
                 session.pop("2fa_setup_secret", None)
-                session["recovery_codes_to_display"] = plain_recovery_codes
-                flash("2FA enabled successfully! SAVE YOUR RECOVERY CODES.", "success")
-
+                session["2fa_verified_this_session"] = True
+                
                 if is_forced_setup:
-                    # Log them in fully now
-                    pre_2fa_email = session.pop("user_email_pre_2fa_force", None)
-                    if pre_2fa_email == current_user_email: # Sanity check
+                    original_email_for_login = session.pop("user_email_pre_2fa_force", None)
+                    if original_email_for_login == current_user_email: 
                         session["user_email"] = current_user_email
                         session["user_role"] = db_user.get("role", "user")
                         session["user_full_name"] = db_user.get("full_name", current_user_email.split('@')[0])
-                    session.pop("force_2fa_setup_email", None) # Critical to remove this
-                
-                return redirect(url_for("show_recovery_codes_page"))
-            else:
-                flash(f"Failed to enable 2FA: {enable_msg}", "error")
-                disable_user_2fa(current_user_email) # Rollback
+                        session.pop("force_2fa_setup_email", None)
+                        flash("2FA enabled successfully! You are now logged in.", "success")
+                        return redirect(url_for("app_frame")) 
+                    else:
+                        app.logger.error("Email mismatch during forced 2FA completion.")
+                        session.clear()
+                        flash("A critical error occurred during login after 2FA setup. Please log in again.", "error")
+                        return redirect(url_for("login"))
+                else: # Voluntary setup from profile
+                    flash("2FA enabled successfully!", "success")
+                    session["2fa_login_email"] = current_user_email 
+                    session.pop("2fa_verified_this_session", None) # Ensure challenge happens
+                    flash("2FA enabled! Please verify with your authenticator app to complete login.", "info")
+                    return redirect(url_for("login_2fa_page"))
+            else: 
+                flash(f"Failed to fully enable 2FA: {enable_msg}. Please try again.", "error")
+                disable_user_2fa(current_user_email) # Attempt to roll back
                 return redirect(url_for("setup_2fa_page", new="true"))
-        else:
-            flash("Invalid authentication code. Try again.", "error")
-            # Fall through to re-render GET part with same secret
-            
-    # GET or failed POST code verification:
+        else: # verify_totp_code returned False
+            flash("Invalid authentication code. Please check your authenticator app and try again.", "error")
+
     if "2fa_setup_secret" not in session or request.args.get("new") == "true":
         session["2fa_setup_secret"] = pyotp.random_base32()
     
-    totp_secret_for_qr = session["2fa_setup_secret"]
+    totp_secret_for_qr = session["2fa_setup_secret"] # Use the one from session (either new or existing for this attempt)
+    
     provisioning_uri = pyotp.totp.TOTP(totp_secret_for_qr).provisioning_uri(
-        name=current_user_email, issuer_name="IntelLaw")
+        name=current_user_email, 
+        issuer_name="IntelLaw" # IMPORTANT: Use your actual application name
+    )
     
     img = qrcode.make(provisioning_uri)
-    buf = io.BytesIO(); img.save(buf); buf.seek(0)
+    buf = io.BytesIO()
+    img.save(buf)
+    buf.seek(0)
     qr_code_data_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode('ascii')
     
-    # Pass a flag to the template if it's a forced setup
     return render_template("setup_2fa.html", 
                            qr_code_data_url=qr_code_data_url, 
-                           otp_secret_display=totp_secret_for_qr,
+                           otp_secret_display=totp_secret_for_qr, # For manual entry
                            is_forced_setup=is_forced_setup,
                            user_email_for_display=current_user_email)
 
-@app.route("/profile/2fa/recovery-codes")
-@require_login # Ensures user is at least partially authenticated (e.g., password verified)
-def show_recovery_codes_page():
-    # Check if we just completed a forced 2FA setup.
-    # This flag would have been set in the setup_2fa_page route upon successful forced setup.
-    was_forced_setup = session.pop("was_forced_2fa_setup_just_completed", False) 
+# @app.route("/2fa/recovery-codes")
+# @require_login # Ensures user is at least partially authenticated (e.g., password verified)
+# def show_recovery_codes_page():
+#     was_forced_setup = session.pop("was_forced_2fa_setup_just_completed", False) 
 
-    # Recovery codes are stored in session temporarily after successful 2FA enable.
-    recovery_codes = session.pop("recovery_codes_to_display", None)
+#     # Recovery codes are stored in session temporarily after successful 2FA enable.
+#     recovery_codes = session.pop("recovery_codes_to_display", None)
 
-    if not recovery_codes:
-        # This can happen if the user refreshes the page or navigates here directly later.
-        flash("Recovery codes are shown only once immediately after enabling 2FA. If you've lost them, you may need to disable and then re-enable 2FA to generate new codes.", "warning")
-        # If they were forced and somehow lost codes before seeing them, this is an issue.
-        # But typically, they should see them right after setup.
-        return redirect(url_for("profile_page")) # Or app_frame if no profile_page
+#     if not recovery_codes:
+#         # This can happen if the user refreshes the page or navigates here directly later.
+#         flash("Recovery codes are shown only once immediately after enabling 2FA. If you've lost them, you may need to disable and then re-enable 2FA to generate new codes.", "warning")
+#         return redirect(url_for("profile_page")) # Or app_frame if no profile_page
 
-    # Determine where the "Done" button should lead.
-    if was_forced_setup:
-        # If they were forced to set up 2FA, they are now fully authenticated and 2FA is enabled.
-        # "Done" should take them to the main application.
-        done_redirect_url = url_for("app_frame")
-        # Ensure full login session is established if it wasn't fully by setup_2fa_page.
-        # (Ideally, setup_2fa_page should have set session["user_email"] etc. after forced setup)
-        if "user_email" not in session and session.get("user_email_pre_2fa_force"): # Double check if needed
-            email = session.pop("user_email_pre_2fa_force")
-            db_user = get_full_user_for_auth(email) # Get full details
-            if db_user:
-                session["user_email"] = db_user.get("email")
-                session["user_role"] = db_user.get("role", "user")
-                session["user_full_name"] = db_user.get("full_name", db_user.get("email").split('@')[0])
-    else:
-        # If it was a voluntary 2FA setup from their profile, "Done" takes them back to profile.
-        done_redirect_url = url_for("profile_page")
+#     # Determine where the "Done" button should lead.
+#     if was_forced_setup:
+#         done_redirect_url = url_for("app_frame")
+#         if "user_email" not in session and session.get("user_email_pre_2fa_force"): # Double check if needed
+#             email = session.pop("user_email_pre_2fa_force")
+#             db_user = get_full_user_for_auth(email) # Get full details
+#             if db_user:
+#                 session["user_email"] = db_user.get("email")
+#                 session["user_role"] = db_user.get("role", "user")
+#                 session["user_full_name"] = db_user.get("full_name", db_user.get("email").split('@')[0])
+#     else:
+#         # If it was a voluntary 2FA setup from their profile, "Done" takes them back to profile.
+#         done_redirect_url = url_for("profile_page")
 
-    return render_template("recovery_codes.html", 
-                           recovery_codes=recovery_codes, 
-                           done_redirect_url=done_redirect_url)
+#     return render_template("recovery_codes.html", 
+#                            recovery_codes=recovery_codes, 
+#                            done_redirect_url=done_redirect_url)
 
-@app.route("/profile/2fa/disable", methods=["POST"])
-@require_login
-def disable_2fa_route():
-    current_user_email = session["user_email"]
-    # Use the new backend function to get password for verification
-    db_user = get_full_user_for_auth(current_user_email) # <<< CHANGED
+# @app.route("/profile/2fa/disable", methods=["POST"])
+# @require_login
+# def disable_2fa_route():
+#     current_user_email = session["user_email"]
+#     # Use the new backend function to get password for verification
+#     db_user = get_full_user_for_auth(current_user_email) # <<< CHANGED
     
-    password_to_confirm = request.form.get("password_confirm_2fa_disable")
+#     password_to_confirm = request.form.get("password_confirm_2fa_disable")
 
-    if not db_user or not password_to_confirm or not verify_password(password_to_confirm, db_user.get("password")):
-        flash("Incorrect password. 2FA not disabled.", "error")
-        return redirect(url_for("profile_page"))
+#     if not db_user or not password_to_confirm or not verify_password(password_to_confirm, db_user.get("password")):
+#         flash("Incorrect password. 2FA not disabled.", "error")
+#         return redirect(url_for("profile_page"))
 
-    success, message = disable_user_2fa(current_user_email) # Uses backend
-    flash(message, "success" if success else "error")
-    return redirect(url_for("profile_page"))
+#     success, message = disable_user_2fa(current_user_email) # Uses backend
+#     flash(message, "success" if success else "error")
+#     return redirect(url_for("profile_page"))
 
 
 @app.route("/update-email-during-otp", methods=["GET"]) # Changed endpoint name to be more descriptive
@@ -580,15 +548,7 @@ def confirm_otp_page():
         success, message = verify_otp_and_activate_user(email_for_confirmation, submitted_otp)
         if success:
             session.pop("otp_confirm_email", None) # Clear session variable
-            flash(message, "success") # "Email confirmed... account is now active!"
-            # Log them in directly or redirect to login
-            # For direct login:
-            # user = get_user_by_email(email_for_confirmation)
-            # if user and user.get("status") == STATUS_ACTIVE:
-            #     session["user_email"] = user.get("email")
-            #     session["user_role"] = user.get("role")
-            #     session["user_full_name"] = user.get("full_name")
-            #     return redirect(url_for("app_frame"))
+            flash(message, "success") # "Email confirmed... 
             return redirect(url_for("login"))
         else:
             flash(message, "error") # "Invalid OTP", "OTP Expired"
@@ -671,23 +631,6 @@ def pending_activation():
     page_message = "Your account is awaiting admin approval. Please check back later."
 
     if email_to_check: user_data = get_user_by_email(email_to_check)
-    
-    if user_data:
-        if user_data.get("status") == STATUS_ACTIVE:
-            flash("Your account is now active! Please log in.", "success")
-            return redirect(url_for("login"))
-        elif user_data.get("status") == STATUS_PENDING_EMAIL_CONFIRMATION:
-            flash("Your email is not yet confirmed. Please check your inbox.", "warning")
-            return redirect(url_for("login"))
-        elif user_data.get("status") == STATUS_DEACTIVATED:
-            flash("Your account is deactivated. Contact support.", "error")
-            return redirect(url_for("login"))
-        elif user_data.get("status") != STATUS_SUSPENDED:
-            flash(f"Account status: '{user_data.get('status')}'. Contact support.", "warning")
-            return redirect(url_for("login"))
-    elif "user_email" not in session and not email_to_check:
-        flash("Please log in to check your account status.", "info")
-        return redirect(url_for("login"))
 
     display_email = email_to_check or (session.get("user_email") if "user_email" in session else None)
     return render_template("pending_activation.html", message=page_message, email=display_email)
@@ -721,9 +664,6 @@ def settings():
         if user_data_from_db.get("status") == STATUS_PENDING_EMAIL_CONFIRMATION:
             can_action = False
             is_deletable = True
-        
-        if user_data_from_db.get("status") == STATUS_DEACTIVATED:
-            is_deletable = True # Cannot "delete" an already deactivated account, maybe "activate" instead
 
         processed_users.append({
             # ... (other fields) ...
@@ -743,8 +683,7 @@ def settings():
     status_order = {
         STATUS_PENDING_EMAIL_CONFIRMATION: 0,
         STATUS_SUSPENDED: 1,
-        STATUS_ACTIVE: 2,
-        STATUS_DEACTIVATED: 3
+        STATUS_ACTIVE: 2
     }
     # ... (your sorting logic, ensure it uses the renamed status constants if needed) ...
     def get_original_created_at(user_dict):
@@ -759,8 +698,7 @@ def settings():
                            # though hardcoding in template is also an option for fixed statuses.
                            STATUS_PENDING_EMAIL_CONFIRMATION=STATUS_PENDING_EMAIL_CONFIRMATION,
                            STATUS_ACTIVE=STATUS_ACTIVE,
-                           STATUS_SUSPENDED=STATUS_SUSPENDED,
-                           STATUS_DEACTIVATED=STATUS_DEACTIVATED
+                           STATUS_SUSPENDED=STATUS_SUSPENDED
                            )
 
 
@@ -859,10 +797,6 @@ def app_frame():
         elif user.get("status") == STATUS_PENDING_EMAIL_CONFIRMATION:
             session.clear() # Log them out, they need to confirm email
             flash("Your email needs to be confirmed. Please check your inbox or log in again.", "warning")
-            return redirect(url_for("login"))
-        elif user.get("status") == STATUS_DEACTIVATED: # <<< ADDED CHECK
-            session.clear()
-            flash("Your account has been deactivated. Please contact support.", "error")
             return redirect(url_for("login"))
         
     # If we reach here, user status is ACTIVE

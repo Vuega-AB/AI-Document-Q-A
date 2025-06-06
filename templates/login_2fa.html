@@ -1,28 +1,176 @@
-{% extends "base_auth.html" %} {# Or your base auth template #}
-{% block title %}Two-Factor Authentication{% endblock %}
+{% extends "base_auth.html" %} {# Or your main application base template #}
+
+{% block title %}Two-Factor Authentication - IntelLaw{% endblock %}
+
+{% block head_extra %}
+<style>
+    body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            background: linear-gradient(to bottom right, #000000, #434343, #f5f5f5);
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+    .auth-form-panel { /* If you use this class from the OTP page structure */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        min-height: 100vh; /* If body isn't already doing this */
+        padding: 20px;
+        box-sizing: border-box;
+    }
+
+    .container.auth-form-box { /* More specific class for this form's container */
+        background-color: #ffffff;
+        padding: 40px 48px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+        width: 100%;
+        max-width: 440px; /* Slightly adjusted max-width */
+        text-align: center;
+    }
+
+    .auth-form-box h2 {
+        font-size: 26px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #111827;
+    }
+
+    .auth-form-box .subtitle { /* Class for descriptive text */
+        font-size: 15px;
+        color: #4b5563;
+        margin-bottom: 24px;
+        line-height: 1.6;
+    }
+    
+    .flash-messages {
+        margin-bottom: 20px;
+        text-align: left;
+    }
+    .flash-messages .alert {
+        padding: 10px 15px; /* Adjusted padding */
+        border-radius: 6px;
+        font-size: 14px;
+        margin-bottom: 12px; /* Adjusted margin */
+    }
+    /* Assuming alert-info, alert-danger etc. are defined in base_auth.html or your main CSS */
+    /* .alert-danger { background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca; } */
+    /* .alert-info { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; } */
+
+
+    .form-group {
+        margin-bottom: 24px;
+        text-align: left;
+    }
+    .form-group label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+    .form-group input[type="text"],
+    .form-group input[type="password"] { /* If you add password for recovery */
+        width: 100%;
+        padding: 12px 14px;
+        font-size: 16px;
+        border: 1.5px solid #d1d5db;
+        border-radius: 8px;
+        outline: none;
+        box-sizing: border-box;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-group input[type="text"]:focus,
+    .form-group input[type="password"]:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3.5px rgba(59, 130, 246, 0.2);
+    }
+
+    .submit-btn { /* Renamed from continue-btn for context */
+        width: 100%;
+        padding: 13px;
+        background-color: #1f2937; /* Dark button */
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        margin-bottom: 20px; /* Space before hr */
+    }
+    .submit-btn:hover {
+        background-color: #374151;
+    }
+
+    hr.divider { /* Styled divider */
+        border: none;
+        border-top: 1px solid #e5e7eb; /* Lighter divider */
+        margin-top: 24px;
+        margin-bottom: 20px;
+    }
+
+    .text-center { text-align: center; }
+    .mt-3 { margin-top: 1rem !important; } /* Bootstrap-like margin */
+    
+    .link-style { /* For Cancel and Logout */
+        color: #4b5563; /* Medium grey, less prominent than primary links */
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+    }
+    .link-style:hover {
+        color: #1f2937; /* Darker on hover */
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container auth-container"> {# Use your existing auth styles #}
-    <h2>Two-Factor Authentication</h2>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-    <p>An authentication code has been sent to your authenticator app.</p>
-    <form method="POST" action="{{ url_for('login_2fa_page') }}">
-        <div class="form-group">
-            <label for="totp_code">Authentication Code</label>
-            <input type="text" class="form-control" id="totp_code" name="totp_code" 
-                   required autofocus autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*">
-        </div>
-        <button type="submit" class="btn btn-primary btn-block">Verify Code</button>
-        <hr>
-        <p class="text-center">
-            <button type="submit" name="use_recovery_code" value="1" class="btn btn-link">Use a recovery code instead</button>
+<div class="auth-form-panel"> {# Optional: if you want consistent outer padding like OTP page #}
+    <div class="container auth-form-box"> {# Specific container for this form #}
+        <h2>Two-Factor Authentication</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        <p class="subtitle">
+            Please enter the 6-digit code from your authenticator app for {{ email }}.
         </p>
-    </form>
-    <p class="text-center mt-3"><a href="{{ url_for('logout') }}">Cancel and Logout</a></p>
+
+        <form method="POST" action="{{ url_for('login_2fa_page') }}">
+            <div class="form-group">
+                <label for="totp_code">Authentication Code</label>
+                <input type="text" class="form-control" id="totp_code" name="totp_code" 
+                       required autofocus autocomplete="one-time-code" 
+                       inputmode="numeric" pattern="[0-9]{6}" maxlength="6" 
+                       placeholder="_ _ _ _ _ _"> {# Placeholder for visual cue #}
+            </div>
+            <button type="submit" class="submit-btn">Verify Code</button>
+        </form>
+        {# Recovery code option was removed as per your previous request #}
+        {# If you re-add it, it would go here, perhaps above the <hr> #}
+        
+        {# <hr class="divider"> #} {# Optional: if you had recovery code link before #}
+        
+        <p class="text-center mt-3">
+            <a href="{{ url_for('logout') }}" class="link-style">Cancel and Logout</a>
+        </p>
+    </div>
 </div>
 {% endblock %}

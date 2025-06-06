@@ -89,7 +89,6 @@ MODEL_ID_TO_NAME_MAP = {v: k for k, v in MODEL_NAME_TO_ID_MAP.items()}
 STATUS_PENDING_EMAIL_CONFIRMATION = "pending_email_confirmation"
 STATUS_ACTIVE = "active"
 STATUS_SUSPENDED = "suspended"
-STATUS_DEACTIVATED = "deactivated" # This will be our "soft delete" status
 
 # --- Password Hashing Functions ---
 def hash_password(password: str) -> bytes:
@@ -198,10 +197,7 @@ def create_user(email, plain_password):
             "otp_expires_at": otp_expiry,
             "has_completed_initial_login": False, # << NEW
             "is_2fa_enabled": False,       # << NEW: 2FA status
-            "totp_secret": None,           # << NEW: Encrypted or plaintext secret for TOTP
-            "recovery_codes": [],        # << NEW: List to store hashed recovery codes
-            "used_recovery_codes": [],    # << NEW: List to track used recovery codes
-            "has_completed_initial_login": False
+            "totp_secret": None
         }
         users_collection.insert_one(user_doc_fields)
         print(f"User {email_lower} registered with {STATUS_PENDING_EMAIL_CONFIRMATION} status. OTP generated.")
@@ -210,15 +206,15 @@ def create_user(email, plain_password):
         print(f"Error creating user {email_lower}: {e}")
         return False, "An error occurred during registration.", None
 
-def mark_initial_login_complete(email):
-    db = get_auth_db()
-    if not db: return False
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    result = users_collection.update_one(
-        {"email": email.lower()},
-        {"$set": {"has_completed_initial_login": True, "updated_at": datetime.now(timezone.utc)}}
-    )
-    return result.modified_count > 0
+# def mark_initial_login_complete(email):
+#     db = get_auth_db()
+#     if not db: return False
+#     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+#     result = users_collection.update_one(
+#         {"email": email.lower()},
+#         {"$set": {"has_completed_initial_login": True, "updated_at": datetime.now(timezone.utc)}}
+#     )
+#     return result.modified_count > 0
 
 def set_user_totp_secret(email, totp_secret):
     """Stores the TOTP secret for a user (usually before it's fully enabled)."""
@@ -240,7 +236,7 @@ def set_user_totp_secret(email, totp_secret):
         print(f"Error in set_user_totp_secret for {email}: {e}")
         return False, "Database operation error."
     
-def enable_user_2fa(email, hashed_recovery_codes):
+def enable_user_2fa(email):
     """Enables 2FA for the user, stores hashed recovery codes, and marks initial login as complete."""
     db = get_auth_db()
     if db is None:  # <<< CORRECTED CHECK
@@ -264,8 +260,6 @@ def enable_user_2fa(email, hashed_recovery_codes):
             {"email": email_lower}, # Use email_lower here too
             {"$set": {
                 "is_2fa_enabled": True,
-                "recovery_codes": hashed_recovery_codes,
-                "used_recovery_codes": [], # Reset used codes
                 "has_completed_initial_login": True, 
                 "updated_at": datetime.now(timezone.utc)
             }}
@@ -293,9 +287,7 @@ def disable_user_2fa(email):
         {"email": email.lower()},
         {"$set": {
             "is_2fa_enabled": False,
-            "totp_secret": None, # Clear the secret
-            "recovery_codes": [],
-            "used_recovery_codes": [],
+            "totp_secret": None,
             "updated_at": datetime.now(timezone.utc)
         }}
     )
@@ -308,50 +300,50 @@ def verify_totp_code(totp_secret, submitted_code):
     totp = pyotp.TOTP(totp_secret)
     return totp.verify(submitted_code, valid_window=1) # Allow current, previous, and next window (e.g., +/- 30s)
 
-def generate_recovery_codes(count=10, length=10):
-    """Generates a list of unique recovery codes."""
-    codes = set()
-    characters = string.ascii_uppercase + string.digits
-    while len(codes) < count:
-        code = ''.join(random.choices(characters, k=length // 2)) + '-' + \
-               ''.join(random.choices(characters, k=length // 2))
-        codes.add(code)
-    return list(codes)
+# def generate_recovery_codes(count=10, length=10):
+#     """Generates a list of unique recovery codes."""
+#     codes = set()
+#     characters = string.ascii_uppercase + string.digits
+#     while len(codes) < count:
+#         code = ''.join(random.choices(characters, k=length // 2)) + '-' + \
+#                ''.join(random.choices(characters, k=length // 2))
+#         codes.add(code)
+#     return list(codes)
 
-def hash_recovery_code(code):
-    # Use bcrypt or another strong hash for recovery codes if storing them.
-    # For simplicity, if you show them once and don't re-show, you might not hash them
-    # in the DB but rather hash the user's input when they try to use one.
-    # Here, let's assume we store hashes.
-    return bcrypt.hashpw(code.encode('utf-8'), bcrypt.gensalt()).decode('utf-8') # Store as string
+# def hash_recovery_code(code):
+#     # Use bcrypt or another strong hash for recovery codes if storing them.
+#     # For simplicity, if you show them once and don't re-show, you might not hash them
+#     # in the DB but rather hash the user's input when they try to use one.
+#     # Here, let's assume we store hashes.
+#     return bcrypt.hashpw(code.encode('utf-8'), bcrypt.gensalt()).decode('utf-8') # Store as string
 
-def verify_recovery_code(email, submitted_code):
-    """Verifies a recovery code and marks it as used."""
-    db = get_auth_db()
-    if not db: return False, "Database error."
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    user = users_collection.find_one({"email": email.lower()})
+# def verify_recovery_code(email, submitted_code):
+#     """Verifies a recovery code and marks it as used."""
+#     db = get_auth_db()
+#     if not db: return False, "Database error."
+#     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+#     user = users_collection.find_one({"email": email.lower()})
 
-    if not user or not user.get("is_2fa_enabled"):
-        return False, "User not found or 2FA not enabled."
+#     if not user or not user.get("is_2fa_enabled"):
+#         return False, "User not found or 2FA not enabled."
 
-    hashed_recovery_codes = user.get("recovery_codes", [])
-    used_recovery_codes = user.get("used_recovery_codes", [])
+#     hashed_recovery_codes = user.get("recovery_codes", [])
+#     used_recovery_codes = user.get("used_recovery_codes", [])
 
-    for hashed_code_str in hashed_recovery_codes:
-        hashed_code_bytes = hashed_code_str.encode('utf-8')
-        if bcrypt.checkpw(submitted_code.encode('utf-8'), hashed_code_bytes):
-            # Code is valid. Check if already used.
-            if hashed_code_str in used_recovery_codes:
-                return False, "Recovery code already used."
+#     for hashed_code_str in hashed_recovery_codes:
+#         hashed_code_bytes = hashed_code_str.encode('utf-8')
+#         if bcrypt.checkpw(submitted_code.encode('utf-8'), hashed_code_bytes):
+#             # Code is valid. Check if already used.
+#             if hashed_code_str in used_recovery_codes:
+#                 return False, "Recovery code already used."
             
-            # Mark as used
-            users_collection.update_one(
-                {"_id": user["_id"]},
-                {"$addToSet": {"used_recovery_codes": hashed_code_str}}
-            )
-            return True, "Recovery code accepted."
-    return False, "Invalid recovery code."
+#             # Mark as used
+#             users_collection.update_one(
+#                 {"_id": user["_id"]},
+#                 {"$addToSet": {"used_recovery_codes": hashed_code_str}}
+#             )
+#             return True, "Recovery code accepted."
+#     return False, "Invalid recovery code."
 
 
 def verify_otp_and_activate_user(email, submitted_otp):
@@ -366,7 +358,7 @@ def verify_otp_and_activate_user(email, submitted_otp):
     user = users_collection.find_one({"email": email_lower})
 
     if not user: return False, "User not found."
-    if user.get("status") == STATUS_ACTIVE: return True, "Account already active."
+    if user.get("status") == STATUS_SUSPENDED: return True, "Account already created."
 
     if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
         return False, "Account not awaiting email confirmation."
@@ -403,7 +395,7 @@ def verify_otp_and_activate_user(email, submitted_otp):
         users_collection.update_one(
             {"_id": user["_id"]},
             {
-                "$set": {"status": STATUS_ACTIVE, "updated_at": current_time_utc}, # Use consistent current time
+                "$set": {"status": STATUS_SUSPENDED, "updated_at": current_time_utc}, # Use consistent current time
                 "$unset": {"email_otp": "", "otp_expires_at": ""} 
             }
         )
@@ -544,7 +536,7 @@ def update_user_status_in_db(user_email, new_status):
     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
     
     # Admin should only be able to set these statuses via the dropdown
-    admin_allowed_statuses = [STATUS_ACTIVE, STATUS_SUSPENDED, STATUS_DEACTIVATED]
+    admin_allowed_statuses = [STATUS_ACTIVE, STATUS_SUSPENDED]
     if new_status not in admin_allowed_statuses:
         return False, f"Invalid target status '{new_status}' for admin action."
 
@@ -559,12 +551,6 @@ def update_user_status_in_db(user_email, new_status):
     try:
         current_dt = datetime.now(timezone.utc)
         update_fields = {"status": new_status, "updated_at": current_dt}
-        
-        if new_status == STATUS_DEACTIVATED:
-            update_fields["deleted_at"] = current_dt
-        # If changing FROM deactivated TO active/suspended, clear deleted_at
-        elif current_user_state.get("status") == STATUS_DEACTIVATED and new_status != STATUS_DEACTIVATED:
-            update_fields["deleted_at"] = None 
 
         result = users_collection.update_one({"email": user_email}, {"$set": update_fields})
         
