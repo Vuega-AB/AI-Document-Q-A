@@ -123,7 +123,7 @@ def create_gradio_app():
                     db_radio = gr.Radio(label="Choose Database", choices=["Dropbox", "MongoDB"], value="MongoDB")
                     db_status = gr.Textbox(label="DB Status", interactive=False)
                 with gr.Tabs() as admin_tabs:
-                    with gr.TabItem("🧠 Model Config"):
+                    with gr.TabItem("🧠 Config"):
                         # ... (Model Config UI remains the same as your last provided version) ...
                         model_selector = gr.Dropdown(label="AI Models (Max 3)", choices=AVAILABLE_MODELS_NAMES, multiselect=True, max_choices=3)
                         vary_temp = gr.Checkbox(label="Vary Temperature", value=True)
@@ -143,7 +143,7 @@ def create_gradio_app():
                         delete_btn = gr.Button("Delete Selected", variant="stop", size="sm")
                         delete_status = gr.Textbox(label="Deletion Status", interactive=False, lines=2)
                     
-                    with gr.TabItem("🌐 Web Scraper Config") as web_scraper_tab:
+                    with gr.TabItem("🌐 Web Scraper") as web_scraper_tab:
                         gr.Markdown("### Web Scraper Configuration Management")
                         scraper_config_feedback_text = gr.Textbox(label="Config Status", interactive=False, lines=2, placeholder="Status messages will appear here...")
                         
