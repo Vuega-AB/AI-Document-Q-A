@@ -366,15 +366,6 @@ def login_2fa_page():
             # Stay on 2FA page to allow another attempt
     return render_template("login_2fa.html", email=email_for_2fa)
 
-# # main_flask_app.py
-# @app.route("/profile")
-# @require_login
-# def profile_page():
-#     user_for_profile = get_user_by_email(session["user_email"]) # This is fine as it gets 'is_2fa_enabled'
-#     if not user_for_profile: return redirect(url_for("logout"))
-#     return render_template("profile.html", user=user_for_profile)
-
-
 @app.route("/2fa/setup", methods=["GET", "POST"])
 @require_login 
 def setup_2fa_page():
@@ -472,55 +463,6 @@ def setup_2fa_page():
                            is_forced_setup=is_forced_setup,
                            user_email_for_display=current_user_email)
 
-# @app.route("/2fa/recovery-codes")
-# @require_login # Ensures user is at least partially authenticated (e.g., password verified)
-# def show_recovery_codes_page():
-#     was_forced_setup = session.pop("was_forced_2fa_setup_just_completed", False) 
-
-#     # Recovery codes are stored in session temporarily after successful 2FA enable.
-#     recovery_codes = session.pop("recovery_codes_to_display", None)
-
-#     if not recovery_codes:
-#         # This can happen if the user refreshes the page or navigates here directly later.
-#         flash("Recovery codes are shown only once immediately after enabling 2FA. If you've lost them, you may need to disable and then re-enable 2FA to generate new codes.", "warning")
-#         return redirect(url_for("profile_page")) # Or app_frame if no profile_page
-
-#     # Determine where the "Done" button should lead.
-#     if was_forced_setup:
-#         done_redirect_url = url_for("app_frame")
-#         if "user_email" not in session and session.get("user_email_pre_2fa_force"): # Double check if needed
-#             email = session.pop("user_email_pre_2fa_force")
-#             db_user = get_full_user_for_auth(email) # Get full details
-#             if db_user:
-#                 session["user_email"] = db_user.get("email")
-#                 session["user_role"] = db_user.get("role", "user")
-#                 session["user_full_name"] = db_user.get("full_name", db_user.get("email").split('@')[0])
-#     else:
-#         # If it was a voluntary 2FA setup from their profile, "Done" takes them back to profile.
-#         done_redirect_url = url_for("profile_page")
-
-#     return render_template("recovery_codes.html", 
-#                            recovery_codes=recovery_codes, 
-#                            done_redirect_url=done_redirect_url)
-
-# @app.route("/profile/2fa/disable", methods=["POST"])
-# @require_login
-# def disable_2fa_route():
-#     current_user_email = session["user_email"]
-#     # Use the new backend function to get password for verification
-#     db_user = get_full_user_for_auth(current_user_email) # <<< CHANGED
-    
-#     password_to_confirm = request.form.get("password_confirm_2fa_disable")
-
-#     if not db_user or not password_to_confirm or not verify_password(password_to_confirm, db_user.get("password")):
-#         flash("Incorrect password. 2FA not disabled.", "error")
-#         return redirect(url_for("profile_page"))
-
-#     success, message = disable_user_2fa(current_user_email) # Uses backend
-#     flash(message, "success" if success else "error")
-#     return redirect(url_for("profile_page"))
-
-
 @app.route("/update-email-during-otp", methods=["GET"]) # Changed endpoint name to be more descriptive
 def update_email_address_page(): # This is the function name used by url_for
     email_for_confirmation = session.get("otp_confirm_email")
@@ -586,34 +528,6 @@ def resend_otp():
         flash(message_from_backend, "error") # "User not found or not awaiting confirmation" etc.
 
     return redirect(url_for("confirm_otp_page")) # Stay on OTP entry page
-
-# @app.route("/confirm_email/<token>")
-# def confirm_email_route(token):
-#     try:
-#         # Token expires in 1 day (86400 seconds) by default with itsdangerous
-#         email = ts.loads(token, salt='email-confirm-salt', max_age=86400)
-#     except SignatureExpired:
-#         flash("The confirmation link has expired. Please try signing up again, or if you have an account, try logging in to request a new link (feature to be added).", "danger")
-#         return redirect(url_for("signup")) # Or a dedicated page to resend confirmation
-#     except BadTimeSignature: # Could be BadSignature or other itsdangerous errors too
-#         flash("The confirmation link is invalid or has been tampered with. Please ensure you used the correct link.", "danger")
-#         return redirect(url_for("signup"))
-#     except Exception as e: # Catch-all for other itsdangerous errors or unexpected issues
-#         app.logger.error(f"Token deserialization error: {e}")
-#         flash("The confirmation link is invalid.", "danger")
-#         return redirect(url_for("signup"))
-
-#     # Attempt to confirm the email in the database
-#     success, message_from_backend = confirm_user_email_in_db(email) # Backend function updates status
-    
-#     if success:
-#         flash(f"{message_from_backend} You can now log in.", "success")
-#     else:
-#         flash(f"Email confirmation failed: {message_from_backend}", "danger")
-#         # Example: If message says "already confirmed and active", guide to login.
-#         # If "user not found", guide to signup.
-#     return redirect(url_for("login"))
-
 
 @app.route("/pending_activation")
 def pending_activation():

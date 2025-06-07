@@ -1149,22 +1149,6 @@ def generate_config_for_download_backend(current_app_config_state_dict):
     except Exception as e:
         return None, f"Error generating config file for download: {e}", False
 
-# In your backend.py file:
-
-# Make sure these are imported if not already
-# from typing import List, Tuple, Optional, Dict (adjust as needed for your type hints)
-
-# --- In your backend.py file ---
-
-# Make sure these are imported if not already (or similar if you use more specific types)
-# from typing import List, Optional, Dict
-
-# You'll need to ensure these global variables are accessible if used within the function,
-# or pass them as part of app_config_state_dict or similar.
-# For example: AVAILABLE_MODELS_DICT, gemini_model_genai, together_client, openai_client
-# And ensure your response generation functions like generate_response_gemini, retrieve_context_from_db etc., are defined.
-
-
 def chat_interface_backend(
     user_input: str,
     chat_history: list[list[str | None]] | None,  # Gradio passes history like this, can be None initially
@@ -1178,30 +1162,6 @@ def chat_interface_backend(
     # Initialize history as an empty list if it's None
     current_chat_history = chat_history if chat_history is not None else []
 
-    # --------------------------------------------------------------------
-    # YOUR LOGIC TO GENERATE `final_bot_response` BASED ON `user_input`
-    # AND `app_config_state_dict` GOES HERE.
-    # This part must result in a single string: `final_bot_response`.
-    #
-    # Example structure (replace with your actual logic):
-    #
-    # context_text = retrieve_context_from_db(user_input, ...)
-    # selected_model_ids = app_config_state_dict.get('selected_models', [])
-    # if not selected_model_ids:
-    #     final_bot_response = "No AI model selected. Please configure one."
-    # else:
-    #     responses = []
-    #     for model_id in selected_model_ids:
-    #         # ... (get model_type, temp, top_p, system_prompt from app_config_state_dict)
-    #         if model_type == "gemini":
-    #             # response_part = generate_response_gemini(...)
-    #             pass # Placeholder
-    #         # ... other model types
-    #         # responses.append(f"Model {model_id}: {response_part}")
-    #     # final_bot_response = "\n\n".join(responses)
-    #     # For simplicity in this example, let's assume a single response for now
-    #     final_bot_response = f"Bot responding to: {user_input} using {selected_model_ids[0] if selected_model_ids else 'default model'}"
-    #
     # --- Replace above placeholder with your actual response generation ---
     context_text = retrieve_context_from_db(user_input, top_k=app_config_state_dict.get("top_k_retrieval", 5))
     
@@ -1343,3 +1303,130 @@ def initialize_all_components(default_db="MongoDB"):
 def get_backend_initial_load_message():
     global BACKEND_INITIAL_LOAD_MSG
     return BACKEND_INITIAL_LOAD_MSG
+
+
+SCRAPER_CONFIG_COLLECTION_NAME = "scraper_configurations" 
+DEFAULT_SCRAPER_PAUSE_SECONDS = 1 #
+
+# --- NEW: Scraper Configuration Backend Functions ---
+
+PREDEFINED_SCRAPER_SOURCES = [
+    {
+        "source_key": "imy_se",
+        "display_name": "IMY (Sweden)",
+        "parameters": {
+            "base_url_root": "https://www.imy.se",
+            "listing_path_segment": "tillsyner",
+            "pagination_query_format": "?query=&page=",
+            "max_pages": 5, # Default max_pages
+            "pause_seconds": DEFAULT_SCRAPER_PAUSE_SECONDS
+        }
+    },
+    {
+        "source_key": "ico_uk",
+        "display_name": "ICO (UK) - Enforcement",
+        "parameters": {
+            "base_url_root": "https://ico.org.uk",
+            "listing_path_segment": "action-weve-taken/enforcement/",
+            "pagination_query_format": "?page_num=", # Example, needs verification
+            "max_pages": 3,
+            "pause_seconds": DEFAULT_SCRAPER_PAUSE_SECONDS
+        }
+    },
+    {
+        "source_key": "dummy_source_1",
+        "display_name": "Dummy News Site",
+        "parameters": {
+            "base_url_root": "https://www.example-news.com",
+            "listing_path_segment": "articles/data-privacy",
+            "pagination_query_format": "/page/", # Example
+            "max_pages": 2,
+            "pause_seconds": DEFAULT_SCRAPER_PAUSE_SECONDS
+        }
+    }
+]
+
+def get_predefined_scraper_sources_list():
+    """Returns a deep copy of the predefined scraper sources."""
+    return json.loads(json.dumps(PREDEFINED_SCRAPER_SOURCES)) # Simple deep copy
+
+def load_scraper_config_from_db():
+    """Loads the scraper configuration list from MongoDB."""
+    global mongo_db_obj
+    if mongo_db_obj is None:
+        print("MongoDB not initialized. Cannot load scraper config.")
+        return [] # Return empty list, UI can show default message
+    try:
+        config_doc = mongo_db_obj[SCRAPER_CONFIG_COLLECTION_NAME].find_one({"_id": "active_scraper_config"})
+        if config_doc and "sources" in config_doc and isinstance(config_doc["sources"], list):
+            return config_doc["sources"]
+        return [] # No config found or malformed
+    except Exception as e:
+        print(f"Error loading scraper config from DB: {e}")
+        return []
+
+def save_scraper_config_to_db(config_sources_list: list):
+    """Saves the entire scraper configuration list to MongoDB."""
+    global mongo_db_obj
+    if mongo_db_obj is None:
+        print("MongoDB not initialized. Cannot save scraper config.")
+        return False, "Database not connected."
+    try:
+        mongo_db_obj[SCRAPER_CONFIG_COLLECTION_NAME].update_one(
+            {"_id": "active_scraper_config"},
+            {"$set": {"sources": config_sources_list, "updated_at": time.time()}},
+            upsert=True
+        )
+        return True, "Scraper configuration saved successfully."
+    except Exception as e:
+        print(f"Error saving scraper config to DB: {e}")
+        return False, f"Error saving scraper config: {e}"
+
+def get_scraper_ui_initial_data():
+    """Called by Gradio UI on load to get initial scraper tab data."""
+    predefined = get_predefined_scraper_sources_list()
+    db_config = load_scraper_config_from_db()
+    return predefined, db_config
+
+def backend_update_scraper_source_in_db(source_key_to_update: str, display_name: str, new_parameters: dict):
+    """Adds or updates a source in the DB config and saves it."""
+    current_db_config = load_scraper_config_from_db()
+    
+    found = False
+    for i, source_conf in enumerate(current_db_config):
+        if source_conf.get("source_key") == source_key_to_update:
+            current_db_config[i]["parameters"] = new_parameters
+            current_db_config[i]["display_name"] = display_name # Ensure display name is also updated
+            found = True
+            break
+    
+    if not found:
+        current_db_config.append({
+            "source_key": source_key_to_update,
+            "display_name": display_name,
+            "parameters": new_parameters
+        })
+        
+    success, msg = save_scraper_config_to_db(current_db_config)
+    if success:
+        return current_db_config, f"Source '{display_name}' updated/added: {msg}"
+    else:
+        # If save failed, return the original config from before the attempt
+        return load_scraper_config_from_db(), f"Failed to update/add '{display_name}': {msg}"
+
+
+def backend_remove_scraper_source_from_db(source_key_to_remove: str):
+    """Removes a source from the DB config and saves it."""
+    current_db_config = load_scraper_config_from_db()
+    
+    initial_len = len(current_db_config)
+    updated_db_config = [s for s in current_db_config if s.get("source_key") != source_key_to_remove]
+    
+    if len(updated_db_config) == initial_len:
+        return updated_db_config, f"Source key '{source_key_to_remove}' not found in DB config. No changes made."
+
+    success, msg = save_scraper_config_to_db(updated_db_config)
+    if success:
+        return updated_db_config, f"Source '{source_key_to_remove}' removed: {msg}"
+    else:
+        return load_scraper_config_from_db(), f"Failed to remove '{source_key_to_remove}': {msg}"
