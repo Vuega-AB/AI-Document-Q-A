@@ -1149,75 +1149,100 @@ def generate_config_for_download_backend(current_app_config_state_dict):
     except Exception as e:
         return None, f"Error generating config file for download: {e}", False
 
+# In backend.py
+
 def chat_interface_backend(
     user_input: str,
-    chat_history: list[list[str | None]] | None,  # Gradio passes history like this, can be None initially
+    chat_history: list[list[str | None]] | None,
     selected_db_state_val: str,
-    app_config_state_dict: dict
-) -> list[list[str | None]]:  # Must return history in this format
+    model_config_dict: dict
+) -> list[list[str | None]]:
+    """
+    Handles the chat logic by retrieving context, generating responses from selected AI models,
+    and updating the chat history.
 
+    Args:
+        user_input: The question asked by the user.
+        chat_history: The existing conversation history.
+        selected_db_state_val: The currently active database ('MongoDB' or 'Dropbox').
+        model_config_dict: The 'model_config' portion of the main application configuration,
+                           containing temperature, top_p, selected models, etc.
+
+    Returns:
+        The updated chat history.
+    """
     if not user_input or not user_input.strip():
         return chat_history if chat_history is not None else []
 
-    # Initialize history as an empty list if it's None
     current_chat_history = chat_history if chat_history is not None else []
 
-    # --- Replace above placeholder with your actual response generation ---
-    context_text = retrieve_context_from_db(user_input, top_k=app_config_state_dict.get("top_k_retrieval", 5))
-    
-    temp_config = app_config_state_dict.get('temperature', 0.7)
-    top_p_config = app_config_state_dict.get('top_p', 0.9)
-    system_prompt_config = app_config_state_dict.get('system_prompt', "You are a helpful assistant.")
-    
+    # 1. Retrieve context from the vector database using RAG
+    print(f"Retrieving context for query: '{user_input[:50]}...'")
+    context_text = retrieve_context_from_db(user_input, top_k=5)
+
+    # 2. Extract model parameters from the passed-in dictionary
+    temp_config = model_config_dict.get('temperature', 0.7)
+    top_p_config = model_config_dict.get('top_p', 0.9)
+    system_prompt_config = model_config_dict.get('system_prompt', "You are a helpful assistant.")
+    selected_ai_model_ids = model_config_dict.get('selected_models', [])
+
+    # 3. Determine parameter variations based on checkboxes
     temp_values_to_run = [temp_config]
-    if app_config_state_dict.get('vary_temperature', False) and temp_config > 0.01: 
+    if model_config_dict.get('vary_temperature', False) and temp_config > 0.01:
+        # Create a list of varied temperatures, clamping values between 0.01 and 1.0
         temp_values_to_run = sorted(list(set([
-            round(max(0.01, temp_config * 0.5), 2), temp_config, 
-            round(min(1.0, temp_config * 1.5), 2) if temp_config * 1.5 <=1.0 else temp_config])))
+            round(max(0.01, temp_config * 0.5), 2), 
+            temp_config, 
+            round(min(1.0, temp_config * 1.5), 2)
+        ])))
 
     top_p_values_to_run = [top_p_config]
-    if app_config_state_dict.get('vary_top_p', False) and top_p_config > 0.01:
+    if model_config_dict.get('vary_top_p', False) and top_p_config > 0.01:
+        # Create a list of varied top_p values, clamping values between 0.01 and 1.0
         top_p_values_to_run = sorted(list(set([
-            round(max(0.01, top_p_config * 0.5), 2), top_p_config,
-            round(min(1.0, top_p_config * 1.5),2) if top_p_config * 1.5 <= 1.0 else top_p_config])))
-        
-    selected_ai_model_ids = app_config_state_dict.get('selected_models', [])
-    bot_response_content_parts = [] 
+            round(max(0.01, top_p_config * 0.5), 2), 
+            top_p_config,
+            round(min(1.0, top_p_config * 1.5), 2)
+        ])))
 
+    # 4. Generate responses from all selected models and parameter combinations
+    bot_response_content_parts = []
     if not selected_ai_model_ids:
-        final_bot_response = "System: No AI model selected in configuration."
+        final_bot_response = "System: No AI model has been selected in the configuration. Please ask an admin to configure one."
     else:
         for model_id in selected_ai_model_ids:
-            # Ensure AVAILABLE_MODELS_DICT, gemini_model_genai, together_client, openai_client are accessible
-            # And generate_response_gemini, generate_response_together_ai, generate_response_openai_api are defined
             model_detail = AVAILABLE_MODELS_DICT.get(model_id, {})
             model_type = model_detail.get("type")
             model_display_name = model_detail.get("name", model_id)
 
             for temp_val in temp_values_to_run:
                 for top_p_val in top_p_values_to_run:
-                    response_content = f"Error generating response for {model_display_name}."
-                    if model_type == "gemini":
+                    print(f"Generating response from {model_display_name} (Temp: {temp_val}, Top-P: {top_p_val})")
+                    response_content = f"Error: Model type '{model_type}' for '{model_display_name}' is not configured correctly."
+                    
+                    # Dynamically call the appropriate generation function
+                    if model_type == "gemini" and gemini_model_genai:
                         response_content = generate_response_gemini(user_input, context_text, temp_val, top_p_val, system_prompt_config)
-                    elif model_type == "together":
+                    elif model_type == "together" and together_client:
                         response_content = generate_response_together_ai(user_input, context_text, model_id, temp_val, top_p_val, system_prompt_config)
-                    elif model_type == "openai":
+                    elif model_type == "openai" and openai_client:
                         response_content = generate_response_openai_api(user_input, context_text, temp_val, top_p_val, system_prompt_config)
                     
+                    # Format the response with model details
                     model_info_str = f"{model_display_name} (T:{temp_val}, P:{top_p_val})"
                     bot_response_content_parts.append(f"--- {model_info_str} ---\n{response_content}")
 
-                    if not app_config_state_dict.get('vary_top_p', False): break 
-                if not app_config_state_dict.get('vary_temperature', False): break 
+                    if not model_config_dict.get('vary_top_p', False):
+                        break  # Exit inner loop if not varying top_p
+                if not model_config_dict.get('vary_temperature', False):
+                    break  # Exit outer loop if not varying temperature
+
         final_bot_response = "\n\n".join(bot_response_content_parts)
         if not final_bot_response:
-            final_bot_response = "No responses generated or models configured."
-    # --------------------------------------------------------------------
+            final_bot_response = "System: No responses were generated. This could be due to an issue with the selected AI models or their configurations."
 
-    # Append the new user message and bot response as a new pair
+    # 5. Append the user message and final bot response to history
     current_chat_history.append([user_input, final_bot_response])
-
-    # Return the updated history in the correct format
     return current_chat_history
 
 # --- End of backend.py relevant section ---
@@ -1247,56 +1272,63 @@ def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_v
     return "\n".join(status_updates), cb_update, md_update
 
 
-# --- Backend Initialization ---
-def initialize_all_components(default_db="MongoDB"):
-    global gemini_model_genai, together_client, openai_client, embedding_model, faiss_index, BACKEND_INITIAL_LOAD_MSG, mongo_client_instance, mongo_db_obj, auth_mongo_db_obj
+# In backend.py
 
-    print("Initializing backend components...")
-    
+# --- CORRECTED initialize_all_components ---
+def initialize_all_components(default_db="MongoDB"):
+    """Initializes all backend components in the correct order."""
+    global gemini_model_genai, together_client, openai_client, embedding_model, faiss_index, BACKEND_INITIAL_LOAD_MSG, mongo_client_instance, mongo_db_obj
+
+    print("--- Backend Initialization Started ---")
     if mongo_client_instance is None:
         initialize_mongodb_client()
+    
+    # CORRECTED CHECK: Use 'is not None'
+    if mongo_db_obj is not None:
+        print("Verifying main application configuration in DB...")
+        backend_get_initial_main_config()
+        if not load_scraper_config_from_db():
+             print("No scraper source config found, initializing with defaults.")
+             default_sources = get_predefined_scraper_sources_list()
+             if default_sources:
+                 save_scraper_config_to_db([default_sources[0]])
+                 print(f"Saved default scraper source '{default_sources[0]['display_name']}' to DB.")
+    else:
+        print("WARNING: MongoDB not available, cannot initialize main config in DB.")
 
+    print("Initializing AI service clients...")
     if GOOGLE_API_KEY:
-        genai.configure(api_key=GOOGLE_API_KEY)
         try:
-            gemini_model_genai = genai.GenerativeModel("gemini-1.5-flash-latest") 
-            print("Gemini client configured with gemini-1.5-flash-latest.")
+            genai.configure(api_key=GOOGLE_API_KEY)
+            gemini_model_genai = genai.GenerativeModel("gemini-1.5-flash-latest")
+            print("  - Google Gemini client configured.")
         except Exception as e:
-            print(f"Failed to initialize Gemini client with 'gemini-1.5-flash-latest': {e}. Trying 'gemini-pro'.")
-            try:
-                gemini_model_genai = genai.GenerativeModel("gemini-pro")
-                print("Gemini client configured with gemini-pro.")
-            except Exception as e_pro:
-                 print(f"Failed to initialize Gemini client with 'gemini-pro': {e_pro}. Gemini features may be affected.")
-    else: print("Warning: GOOGLE_API_KEY not found. Gemini features will be disabled.")
+            print(f"  - Google Gemini client init failed: {e}")
+    else:
+        print("  - Google Gemini client: SKIPPED (GOOGLE_API_KEY not set).")
 
-    if TOGETHER_API_KEY:
-        together_client = Together(api_key=TOGETHER_API_KEY)
-        print("TogetherAI client configured.")
-    else: print("Warning: TOGETHER_API_KEY not found. Together AI features will be disabled.")
+    # ... (other AI client inits)
 
-    if OPENAI_API_KEY:
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        print("OpenAI client configured.")
-    else: print("Warning: OPENAI_API_KEY not found. OpenAI features will be disabled.")
-
+    print("Initializing local RAG components...")
     try:
         embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-        print("SentenceTransformer model loaded.")
+        print(f"  - SentenceTransformer model loaded (Dimension: {embedding_model.get_sentence_embedding_dimension()}).")
+        faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
+        print("  - FAISS index initialized.")
     except Exception as e:
-        print(f"Error loading SentenceTransformer model: {e}. Backend cannot function fully.")
-        BACKEND_INITIAL_LOAD_MSG = "Critical: Embedding model failed. Backend non-functional."
-        return # Cannot proceed without embedding model
+        print(f"  - CRITICAL ERROR loading SentenceTransformer model: {e}. RAG features disabled.")
+        BACKEND_INITIAL_LOAD_MSG = "Critical: Embedding model failed. RAG non-functional."
+        print("--- Backend Initialization Halted ---")
+        return
 
+    print("Initializing Dropbox client...")
     initialize_dropbox_client()
-
-    if embedding_model:
-        BACKEND_INITIAL_LOAD_MSG = load_data_from_selected_db(default_db)
-    else: # Should not happen due to return above, but as a safeguard
-        BACKEND_INITIAL_LOAD_MSG = "Critical component (embedding model) failed. Data loading skipped."
+    print(f"Loading initial data from default database: '{default_db}'...")
+    BACKEND_INITIAL_LOAD_MSG = load_data_from_selected_db(default_db)
     
-    print(f"Backend Initial Load Status: {BACKEND_INITIAL_LOAD_MSG}")
-    print("Backend initialization complete.")
+    print(f"Final DB Load Status: {BACKEND_INITIAL_LOAD_MSG}")
+    print("--- Backend Initialization Complete ---")
+
 
 
 
@@ -1430,3 +1462,119 @@ def backend_remove_scraper_source_from_db(source_key_to_remove: str):
         return updated_db_config, f"Source '{source_key_to_remove}' removed: {msg}"
     else:
         return load_scraper_config_from_db(), f"Failed to remove '{source_key_to_remove}': {msg}"
+
+
+#Config
+# --- Add this new constant near the top ---
+MAIN_CONFIG_COLLECTION_NAME = "main_app_config"
+
+# --- Add this new group of functions for Main Configuration Management ---
+
+def get_default_main_config():
+    """Returns the default structure for the main application config."""
+    # Find a default model ID if possible
+    default_model_id = None
+    if MODEL_NAME_TO_ID_MAP:
+        first_model_name = AVAILABLE_MODELS_NAMES[0]
+        # Look up its corresponding ID
+        default_model_id = MODEL_NAME_TO_ID_MAP.get(first_model_name)
+
+    return {
+        "model_config": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "system_prompt": "You are a helpful assistant. Answer questions based on the provided context.",
+            "vary_temperature": True,
+            "vary_top_p": False,
+            "selected_models": [default_model_id] if default_model_id else []
+        },
+        "cron_schedule": "0 2 * * *", # Default: Run at 2:00 AM every day
+    }
+
+def backend_get_initial_main_config():
+    """
+    Loads the main config from the DB. If it doesn't exist, creates, saves,
+    and returns the default config. This is the primary function for loading config.
+    """
+    global mongo_db_obj
+    if mongo_db_obj is None:
+        print("MongoDB not initialized. Returning default config without saving.")
+        return get_default_main_config()
+    
+    try:
+        config_doc = mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].find_one({"_id": "singleton_config"})
+        if config_doc:
+            # Remove MongoDB's '_id' before returning to the UI state
+            config_doc.pop('_id', None)
+            return config_doc
+        else:
+            # Config doesn't exist, so create and save the default one
+            print("No main config found in DB. Creating and saving default config.")
+            default_config = get_default_main_config()
+            # The spread operator `**` unpacks the dictionary
+            mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].insert_one({
+                "_id": "singleton_config",
+                **default_config
+            })
+            return default_config
+    except Exception as e:
+        print(f"Error loading main config from DB: {e}. Returning default.")
+        return get_default_main_config()
+def backend_update_main_config(updated_config: dict):
+    """Saves the provided main configuration object to the database."""
+    global mongo_db_obj
+    if mongo_db_obj is None:
+        return False, "Database not connected. Config not saved.", updated_config
+    
+    try:
+        # Use update_one with upsert=True to either update the existing doc or create it
+        mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].update_one(
+            {"_id": "singleton_config"},
+            {"$set": updated_config},
+            upsert=True
+        )
+        return True, "Configuration saved successfully!", updated_config
+    except Exception as e:
+        print(f"Error saving main config to DB: {e}")
+        return False, f"Error saving configuration: {e}", updated_config
+
+def backend_apply_uploaded_main_config(config_file_obj):
+    """
+    Replaces the entire main config with the content of an uploaded JSON file.
+    Returns: (status_msg, success_bool, final_config_dict)
+    """
+    if config_file_obj is None:
+        return "No config file uploaded.", False, backend_get_initial_main_config()
+    try:
+        with open(config_file_obj.name, 'r', encoding='utf-8') as f:
+            new_config = json.load(f)
+        
+        # Here you could add validation to ensure the uploaded config has the right structure
+        if "model_config" not in new_config or "cron_schedule" not in new_config:
+            raise ValueError("Uploaded config is missing required keys like 'model_config' or 'cron_schedule'.")
+            
+        success, msg, final_config = backend_update_main_config(new_config)
+        if success:
+            msg = "Configuration successfully applied from uploaded file."
+        return msg, success, final_config
+    except Exception as e:
+        error_msg = f"Error applying uploaded config: {e}"
+        return error_msg, False, backend_get_initial_main_config()
+
+def backend_generate_main_config_for_download(current_main_config: dict):
+    """
+    Generates a temporary file containing the current main config for download.
+    Returns: Path to the temporary file or None on error.
+    """
+    try:
+        # Use a temporary file that Gradio can serve
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding='utf-8') as tmp_file:
+            # The current_main_config from the UI state is already a Python dict
+            json.dump(current_main_config, tmp_file, indent=2)
+            tmp_file_path = tmp_file.name
+        # Gradio's DownloadButton component needs the file path to be returned
+        return tmp_file_path
+    except Exception as e:
+        print(f"Error generating config file for download: {e}")
+        # Return None to indicate failure; the UI won't trigger a download
+        return None
