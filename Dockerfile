@@ -8,8 +8,11 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED 1
 ENV PYTHONDONTWRITEBYTECODE 1
 
-# Install essential system packages that some Python libraries might need
-RUN apt-get update && apt-get install -y build-essential && rm -rf /var/lib/apt/lists/*
+# Install essential system packages, including dos2unix
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    dos2unix \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy only the requirements file first to use Docker's caching mechanism
 COPY requirements.txt .
@@ -21,5 +24,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of your project files into the container
 COPY . .
 
-# The hosting platform will use the Procfile to run the commands,
-# so no CMD or ENTRYPOINT is needed here.
+# IMPORTANT: Ensure the start script has correct permissions and line endings
+RUN dos2unix ./start.sh
+RUN chmod +x ./start.sh
+
+# The hosting platform will use the start.sh script as the start command.

@@ -1,14 +1,16 @@
-#!/bin/bash
+#!/bin/sh
 
-# This script starts the two processes for the application.
+# Exit immediately if a command exits with a non-zero status.
+set -e
 
-# 1. Start the Gradio worker process in the background.
-#    It will run on port 7860 internally. The --workers 1 flag is crucial for free plans.
-echo "Starting Gradio worker..."
+# --- Start Gradio Worker in the Background ---
+echo "INFO: Starting Gradio/Uvicorn worker process..."
 uvicorn gradio_server:fast_api_app --host 0.0.0.0 --port 7860 --workers 1 &
+echo "INFO: Gradio worker started in the background."
 
-# 2. Start the Flask web server in the foreground.
-#    This is the main process that Render will monitor. It will use the
-#    $PORT environment variable provided by Render.
-echo "Starting Flask web server..."
-gunicorn app:app --bind 0.0.0.0:$PORT
+
+# --- Start Flask Web Server in the Foreground ---
+echo "INFO: Starting Flask/Gunicorn web process..."
+# This is the main process. It will bind to the port Render provides.
+# The --access-logfile - flag prints access logs to standard output, which is helpful for debugging.
+gunicorn --workers 3 --bind 0.0.0.0:$PORT --access-logfile - "app:app"
