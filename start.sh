@@ -13,4 +13,4 @@ echo "INFO: Gradio worker started in the background."
 echo "INFO: Starting Flask/Gunicorn web process..."
 # This is the main process. It will bind to the port Render provides.
 # The --access-logfile - flag prints access logs to standard output, which is helpful for debugging.
-gunicorn --workers 3 --bind 0.0.0.0:$PORT --access-logfile - "main_flask_app:app"
+gunicorn --workers 3 --bind 0.0.0.0:10000 --access-logfile - "main_flask_app:app"
