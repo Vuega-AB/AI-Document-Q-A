@@ -14,7 +14,6 @@ import base64
 # Corrected backend imports
 from backend import (
     initialize_all_components,
-    create_admin_user_if_not_exists,
     create_user,
     get_user_by_email,
     verify_password,
@@ -22,7 +21,6 @@ from backend import (
     verify_otp_and_activate_user,
     regenerate_otp_for_user,
     get_full_user_for_auth,
-    # MONGO_URI, # If used directly in Flask app, else remove (backend handles its own)
     get_all_users_from_db,
     set_user_totp_secret, enable_user_2fa, verify_totp_code,
     update_user_status_in_db,
@@ -67,8 +65,7 @@ def run_flask_app_initializations():
     global FLASK_APP_INITIALIZED
     if not FLASK_APP_INITIALIZED:
         print("Running initializations for Flask App process...")
-        initialize_all_components(default_db="MongoDB") # Or "MongoDB"
-        create_admin_user_if_not_exists(APP_ADMIN_EMAIL, APP_ADMIN_PASSWORD, role="admin")
+        initialize_all_components(default_db="MongoDB")
         FLASK_APP_INITIALIZED = True
     else:
         print("Flask App initializations already run.")

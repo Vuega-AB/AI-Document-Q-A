@@ -1,65 +1,88 @@
+# ======================================================================================
+# ||                                                                                    ||
+# ||                                     IMPORTS                                        ||
+# ||                                                                                    ||
+# ======================================================================================
 import os
-import requests
-from bs4 import BeautifulSoup
-import aiohttp
-import asyncio
-import PyPDF2
-import faiss
-import time # Make sure time is imported
-import numpy as np
-from sentence_transformers import SentenceTransformer
-from langdetect import detect
 import json
-from dotenv import load_dotenv
-from io import BytesIO
-from together import Together
+import time
 import re
-from pymongo import MongoClient, server_api
-import logging
-from openai import OpenAI
-import sys
-import httpx
-from urllib.parse import urljoin
-import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
-import dropbox
 import hashlib
-import io
 import tempfile
-import bcrypt
-import gradio
-from datetime import datetime # Make sure datetime is imported
-from datetime import datetime, timezone # MODIFIED: Added timezone
-import random
+import io
 import string
+import random
 from datetime import datetime, timezone, timedelta
+
+# --- Third-party Libraries ---
+from dotenv import load_dotenv
+import numpy as np
+import bcrypt
+import pyotp
+from pymongo import MongoClient, server_api
+from sentence_transformers import SentenceTransformer
+import faiss
+import dropbox
+import PyPDF2
+
+# --- AI SDKs ---
+from together import Together
+from openai import OpenAI
+import google.generativeai as genai
+
+import gradio as gr 
+
+from datetime import datetime, timezone, timedelta
+import bcrypt
 import pyotp
 
-def generate_otp(length=6):
-    return "".join(random.choices(string.digits, k=length))
-# --- Environment Variables & Initializations ---
+# ======================================================================================
+# ||                                                                                    ||
+# ||                         ENVIRONMENT & GLOBAL CONFIGURATION                           ||
+# ||                                                                                    ||
+# ======================================================================================
 load_dotenv()
+
+# --- API Keys & Secrets ---
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-MONGO_URI = os.getenv("MongoDB") 
-if not MONGO_URI:
-    MONGO_URI = os.getenv("MONGO_URI")
-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MONGO_URI = os.getenv("MongoDB") or os.getenv("MONGO_URI")
 DROPBOX_REFRESH_TOKEN = os.getenv("DROPBOX_REFRESH_TOKEN")
 DROPBOX_APP_KEY = os.getenv("DROPBOX_APP_KEY")
 DROPBOX_APP_SECRET = os.getenv("DROPBOX_APP_SECRET")
 
-CONFIG_FILENAME = "app_config_main.json"
+# --- MongoDB Collection & File Names ---
+MONGO_DB_NAME = "IntelLawDB_Gradio"
+MAIN_CONFIG_COLLECTION_NAME = "main_app_config"
+SCRAPER_CONFIG_COLLECTION_NAME = "scraper_configurations"
+ADMIN_USERS_COLLECTION_NAME = "admin_users"
+FAISS_COLLECTION_NAME = "faiss_index_store"
+TEXT_STORE_COLLECTION_NAME = "text_content_store"
 INDEX_FILE_DROPBOX = "/faiss_index.index"
 TEXT_FILE_DROPBOX = "/text_store.json"
 TOKEN_FILE = "dropbox_token.json"
-MONGO_DB_NAME = "IntelLawDB_Gradio"
-FAISS_COLLECTION_NAME = "faiss_index_store"
-TEXT_STORE_COLLECTION_NAME = "text_content_store"
-ADMIN_USERS_COLLECTION_NAME = "admin_users" # User credentials and status
 
-# --- Global Variables for Backend State ---
+# --- User Status Constants ---
+STATUS_PENDING_EMAIL_CONFIRMATION = "pending_email_confirmation"
+STATUS_ACTIVE = "active"
+STATUS_SUSPENDED = "suspended"
+
+# --- AI Model Definitions ---
+AVAILABLE_MODELS_DICT = {
+    "gemini-1.5-flash-latest": {"price": "Custom", "type": "gemini", "name": "Gemini 1.5 Flash"},
+    "openai-gpt-4o": {"price": "Custom", "type": "openai", "name": "OpenAI GPT-4o"},
+    "meta-llama/Llama-3-70B-Instruct-hf": {"price": "$0.90", "type": "together", "name": "Llama3 70B Instruct (HF)"},
+    "meta-llama/Llama-3-8B-Instruct-hf": {"price": "$0.20", "type": "together", "name": "Llama3 8B Instruct (HF)"},
+    "microsoft/WizardLM-2-8x22B": {"price": "$1.80", "type": "together", "name": "WizardLM-2 8x22B"},
+    "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together", "name": "Mixtral 8x22B Instruct"},
+    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together", "name": "Hermes-2 Mixtral DPO"},
+}
+AVAILABLE_MODELS_NAMES = sorted([details['name'] for details in AVAILABLE_MODELS_DICT.values()])
+MODEL_NAME_TO_ID_MAP = {details['name']: model_id for model_id, details in AVAILABLE_MODELS_DICT.items()}
+MODEL_ID_TO_NAME_MAP = {v: k for k, v in MODEL_NAME_TO_ID_MAP.items()}
+
+# --- Global Backend State Variables ---
 gemini_model_genai = None
 together_client = None
 openai_client = None
@@ -72,556 +95,157 @@ faiss_index = None
 text_store = []
 BACKEND_INITIAL_LOAD_MSG = "Backend not initialized."
 
-AVAILABLE_MODELS_DICT = {
-    "gemini-1.5-flash-latest": {"price": "Custom", "type": "gemini", "name": "Gemini 1.5 Flash"},
-    "openai-gpt-4o": {"price": "Custom", "type": "openai", "name": "OpenAI GPT-4o"},
-    "meta-llama/Llama-3-70B-Instruct-hf": {"price": "$0.90", "type": "together", "name": "Llama3 70B Instruct (HF)"},
-    "meta-llama/Llama-3-8B-Instruct-hf": {"price": "$0.20", "type": "together", "name": "Llama3 8B Instruct (HF)"},
-    "microsoft/WizardLM-2-8x22B": {"price": "$1.80", "type": "together", "name": "WizardLM-2 8x22B"},
-    "mistralai/Mixtral-8x22B-Instruct-v0.1": {"price": "$1.20", "type": "together", "name": "Mixtral 8x22B Instruct"},
-    "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO": {"price": "$0.60", "type": "together", "name": "Hermes-2 Mixtral DPO"},
-}
-AVAILABLE_MODELS_NAMES = [details['name'] for details in AVAILABLE_MODELS_DICT.values()]
-MODEL_NAME_TO_ID_MAP = {details['name']: model_id for model_id, details in AVAILABLE_MODELS_DICT.items()}
-MODEL_ID_TO_NAME_MAP = {v: k for k, v in MODEL_NAME_TO_ID_MAP.items()}
+# ======================================================================================
+# ||                                                                                    ||
+# ||                            AUTHENTICATION & USER MGMT                              ||
+# ||                                                                                    ||
+# ======================================================================================
 
-# --- Status Constants ---
-STATUS_PENDING_EMAIL_CONFIRMATION = "pending_email_confirmation"
-STATUS_ACTIVE = "active"
-STATUS_SUSPENDED = "suspended"
+def generate_otp(length=6):
+    """Generates a random numerical OTP."""
+    return "".join(random.choices(string.digits, k=length))
 
-# --- Password Hashing Functions ---
 def hash_password(password: str) -> bytes:
+    """Hashes a password using bcrypt."""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
 def verify_password(plain_password: str, hashed_password_bytes: bytes) -> bool:
+    """Verifies a plain password against a bcrypt hash."""
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password_bytes)
 
-# --- MongoDB User Authentication Functions ---
 def get_auth_db():
+    """Initializes and/or returns the authentication database object."""
     global auth_mongo_db_obj, mongo_client_instance
     if auth_mongo_db_obj is None:
         if mongo_client_instance is None:
-            initialize_mongodb_client() # Ensures client is initialized
-        if mongo_client_instance:
-            # Use the same DB instance for auth, just different collections
+            initialize_mongodb_client()
+        if mongo_client_instance is not None:
             auth_mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] 
     return auth_mongo_db_obj
 
-def create_admin_user_if_not_exists(email, plain_password, role="admin"):
-    db = get_auth_db()
-    if db is None:
-        print("Error: MongoDB for auth not available. Cannot create/update admin user.")
-        return False
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    
-    user = users_collection.find_one({"email": email})
-    current_dt = datetime.now(timezone.utc) # MODIFIED: Use datetime
 
-    if user:
-        print(f"User {email} already exists.")
-        if user.get("status") != STATUS_ACTIVE or user.get("role") != "admin":
-            users_collection.update_one(
-                {"email": email},
-                {"$set": {"status": STATUS_ACTIVE, "role": "admin", "updated_at": current_dt}} # MODIFIED
-            )
-            print(f"Updated user {email} to ensure admin role and active status.")
-        return True
+# ======================================================================================
+# ||                                                                                    ||
+# ||                                 MAIN APP CONFIG                                    ||
+# ||                                                                                    ||
+# ======================================================================================
+
+def get_default_main_config():
+    """Returns the default structure for the main application config."""
+    default_model_id = None
+    if AVAILABLE_MODELS_NAMES:
+        first_model_name = AVAILABLE_MODELS_NAMES[0]
+        default_model_id = MODEL_NAME_TO_ID_MAP.get(first_model_name)
+
+    return {
+        "model_config": {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "system_prompt": "You are a helpful assistant. Answer questions based on the provided context.",
+            "vary_temperature": True,
+            "vary_top_p": False,
+            "selected_models": [default_model_id] if default_model_id else []
+        },
+        "cron_schedule": "0 2 * * *",
+    }
+
+def backend_get_initial_main_config():
+    """Loads the main config from DB. If it doesn't exist, creates and returns the default."""
+    global mongo_db_obj
+    if mongo_db_obj is None:
+        print("WARNING: MongoDB not initialized. Returning default config without saving.")
+        return get_default_main_config()
     
-    hashed_pass = hash_password(plain_password)
     try:
-        users_collection.insert_one({
-            "email": email,
-            "password": hashed_pass,
-            "role": role,
-            "status": STATUS_ACTIVE, # Admins are active by default
-            "created_at": current_dt, # MODIFIED
-            "updated_at": current_dt, # MODIFIED
-            "full_name": email.split('@')[0] # Added for consistency
-        })
-        print(f"Admin user {email} created successfully with active status.")
-        return True
-    except Exception as e:
-        print(f"Error creating admin user {email}: {e}")
-        return False
-
-
-def create_user(email, plain_password):
-    """
-    Creates a new user with 'pending_email_confirmation' status,
-    generates an OTP, and stores it.
-    Returns: (success_bool, message_str, otp_str_or_None)
-    """
-    db = get_auth_db()
-    if db is None:
-        return False, "Database error, please try again later.", None
-    
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    email_lower = email.lower()
-    existing_user = users_collection.find_one({"email": email_lower})
-    current_dt = datetime.now(timezone.utc)
-    
-    otp = generate_otp()
-    otp_expiry = current_dt + timedelta(minutes=10) # OTP valid for 10 minutes
-
-    if existing_user:
-        if existing_user.get("status") == STATUS_PENDING_EMAIL_CONFIRMATION:
-            # User exists but email not confirmed. Update password, regenerate OTP.
-            hashed_pass = hash_password(plain_password)
-            users_collection.update_one(
-                {"email": email_lower},
-                {"$set": {
-                    "password": hashed_pass,
-                    "updated_at": current_dt,
-                    "created_at": current_dt, # Optionally refresh for new OTP window
-                    "email_otp": otp,          # Update OTP
-                    "otp_expires_at": otp_expiry # Update OTP expiry
-                }}
-            )
-            print(f"User {email_lower} re-attempted signup. OTP regenerated.")
-            return True, "An OTP has been re-sent to your email.", otp
-        else: # User exists and is in another state (active, suspended)
-            return False, "Email address already registered and confirmed or in another state.", None
-
-    hashed_pass = hash_password(plain_password)
-    try:
-        user_doc_fields = {
-            "email": email_lower,
-            "password": hashed_pass,
-            "role": "user",
-            "status": STATUS_PENDING_EMAIL_CONFIRMATION,
-            "created_at": current_dt,
-            "updated_at": current_dt,
-            "full_name": email_lower.split('@')[0],
-            "email_otp": otp,
-            "otp_expires_at": otp_expiry,
-            "has_completed_initial_login": False, # << NEW
-            "is_2fa_enabled": False,       # << NEW: 2FA status
-            "totp_secret": None
-        }
-        users_collection.insert_one(user_doc_fields)
-        print(f"User {email_lower} registered with {STATUS_PENDING_EMAIL_CONFIRMATION} status. OTP generated.")
-        return True, "User record created. An OTP has been sent to your email.", otp
-    except Exception as e:
-        print(f"Error creating user {email_lower}: {e}")
-        return False, "An error occurred during registration.", None
-
-# def mark_initial_login_complete(email):
-#     db = get_auth_db()
-#     if not db: return False
-#     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-#     result = users_collection.update_one(
-#         {"email": email.lower()},
-#         {"$set": {"has_completed_initial_login": True, "updated_at": datetime.now(timezone.utc)}}
-#     )
-#     return result.modified_count > 0
-
-def set_user_totp_secret(email, totp_secret):
-    """Stores the TOTP secret for a user (usually before it's fully enabled)."""
-    db = get_auth_db()
-    if db is None:  # <<< CORRECTED CHECK
-        print("Error: Auth DB not available in set_user_totp_secret.")
-        return False, "Database connection error. Failed to set TOTP secret."
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    try:
-        result = users_collection.update_one(
-            {"email": email.lower()},
-            {"$set": {"totp_secret": totp_secret, "is_2fa_enabled": False, "updated_at": datetime.now(timezone.utc)}}
-        )
-        if result.modified_count > 0 or result.matched_count > 0 : # matched_count in case it was already set to the same
-            return True, "TOTP secret set/updated."
-        else: # User not found
-            return False, "User not found. Failed to set TOTP secret."
-    except Exception as e:
-        print(f"Error in set_user_totp_secret for {email}: {e}")
-        return False, "Database operation error."
-    
-def enable_user_2fa(email):
-    """Enables 2FA for the user, stores hashed recovery codes, and marks initial login as complete."""
-    db = get_auth_db()
-    if db is None:  # <<< CORRECTED CHECK
-        print("Error: Auth DB not available in enable_user_2fa.")
-        return False, "Database connection error. Failed to enable 2FA."
-    
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    email_lower = email.lower() # Ensure consistent casing
-    user = users_collection.find_one({"email": email_lower})
-
-    if not user: # Added check for user existence
-        print(f"Error: User {email_lower} not found in enable_user_2fa.")
-        return False, "User not found. Cannot enable 2FA."
-        
-    if not user.get("totp_secret"): # Prerequisite check
-        print(f"Error: TOTP secret not set for {email_lower} before enabling 2FA.")
-        return False, "Cannot enable 2FA: Critical setup step (TOTP secret) missing."
-
-    try:
-        result = users_collection.update_one(
-            {"email": email_lower}, # Use email_lower here too
-            {"$set": {
-                "is_2fa_enabled": True,
-                "has_completed_initial_login": True, 
-                "updated_at": datetime.now(timezone.utc)
-            }}
-        )
-        if result.modified_count > 0:
-            print(f"2FA enabled for user {email_lower}.")
-            return True, "2FA enabled successfully."
-        elif result.matched_count > 0 and user.get("is_2fa_enabled") is True: # Already enabled with same codes?
-            print(f"2FA was already enabled for {email_lower}, considered success.")
-            return True, "2FA was already enabled." # Or a more specific message
+        config_doc = mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].find_one({"_id": "singleton_config"})
+        if config_doc:
+            config_doc.pop('_id', None)
+            return config_doc
         else:
-            print(f"Failed to enable 2FA for {email_lower}. Matched: {result.matched_count}, Modified: {result.modified_count}")
-            return False, "Failed to update record to enable 2FA."
-            
+            print("INFO: No main config found in DB. Creating and saving default config.")
+            default_config = get_default_main_config()
+            mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].insert_one({"_id": "singleton_config", **default_config})
+            return default_config
     except Exception as e:
-        print(f"Database error in enable_user_2fa for {email_lower}: {e}")
-        return False, "Database operation error during 2FA enabling."
-    
-def disable_user_2fa(email):
-    """Disables 2FA for the user."""
-    db = get_auth_db()
-    if not db: return False, "Database error."
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    result = users_collection.update_one(
-        {"email": email.lower()},
-        {"$set": {
-            "is_2fa_enabled": False,
-            "totp_secret": None,
-            "updated_at": datetime.now(timezone.utc)
-        }}
-    )
-    return result.modified_count > 0, "2FA disabled." if result.modified_count > 0 else "Failed to disable 2FA."
+        print(f"ERROR: Could not load main config from DB: {e}. Returning default.")
+        return get_default_main_config()
 
-def verify_totp_code(totp_secret, submitted_code):
-    """Verifies a TOTP code against the user's secret."""
-    if not totp_secret or not submitted_code:
-        return False
-    totp = pyotp.TOTP(totp_secret)
-    return totp.verify(submitted_code, valid_window=1) # Allow current, previous, and next window (e.g., +/- 30s)
-
-# def generate_recovery_codes(count=10, length=10):
-#     """Generates a list of unique recovery codes."""
-#     codes = set()
-#     characters = string.ascii_uppercase + string.digits
-#     while len(codes) < count:
-#         code = ''.join(random.choices(characters, k=length // 2)) + '-' + \
-#                ''.join(random.choices(characters, k=length // 2))
-#         codes.add(code)
-#     return list(codes)
-
-# def hash_recovery_code(code):
-#     # Use bcrypt or another strong hash for recovery codes if storing them.
-#     # For simplicity, if you show them once and don't re-show, you might not hash them
-#     # in the DB but rather hash the user's input when they try to use one.
-#     # Here, let's assume we store hashes.
-#     return bcrypt.hashpw(code.encode('utf-8'), bcrypt.gensalt()).decode('utf-8') # Store as string
-
-# def verify_recovery_code(email, submitted_code):
-#     """Verifies a recovery code and marks it as used."""
-#     db = get_auth_db()
-#     if not db: return False, "Database error."
-#     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-#     user = users_collection.find_one({"email": email.lower()})
-
-#     if not user or not user.get("is_2fa_enabled"):
-#         return False, "User not found or 2FA not enabled."
-
-#     hashed_recovery_codes = user.get("recovery_codes", [])
-#     used_recovery_codes = user.get("used_recovery_codes", [])
-
-#     for hashed_code_str in hashed_recovery_codes:
-#         hashed_code_bytes = hashed_code_str.encode('utf-8')
-#         if bcrypt.checkpw(submitted_code.encode('utf-8'), hashed_code_bytes):
-#             # Code is valid. Check if already used.
-#             if hashed_code_str in used_recovery_codes:
-#                 return False, "Recovery code already used."
-            
-#             # Mark as used
-#             users_collection.update_one(
-#                 {"_id": user["_id"]},
-#                 {"$addToSet": {"used_recovery_codes": hashed_code_str}}
-#             )
-#             return True, "Recovery code accepted."
-#     return False, "Invalid recovery code."
-
-
-def verify_otp_and_activate_user(email, submitted_otp):
-    """
-    Verifies the submitted OTP for the given email and activates the user if valid.
-    Returns: (success_bool, message_str)
-    """
-    db = get_auth_db()
-    if db is None: return False, "Database error."
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    email_lower = email.lower()
-    user = users_collection.find_one({"email": email_lower})
-
-    if not user: return False, "User not found."
-    if user.get("status") == STATUS_SUSPENDED: return True, "Account already created."
-
-    if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
-        return False, "Account not awaiting email confirmation."
-
-    stored_otp = user.get("email_otp")
-    otp_expires_at = user.get("otp_expires_at") 
-
-    if not stored_otp or not otp_expires_at:
-        return False, "OTP not found or has an issue. Please request a new one."
-    
-    # --- FIX STARTS HERE ---
-    # Ensure otp_expires_at is a datetime object and make it timezone-aware (assuming UTC)
-    if not isinstance(otp_expires_at, datetime):
-        # This case should ideally not happen if you store datetime objects.
-        # If it's a string or timestamp, you'd need to parse it first.
-        # For example, if it was a Unix timestamp (float):
-        # otp_expires_at = datetime.fromtimestamp(otp_expires_at, timezone.utc)
-        print(f"ERROR: otp_expires_at for {email_lower} is not a datetime object from DB: {type(otp_expires_at)}")
-        return False, "Internal error with OTP expiry format. Please try again."
-
-    if otp_expires_at.tzinfo is None:
-        # If it's naive, assume it was stored as UTC and make it UTC-aware
-        otp_expires_at = otp_expires_at.replace(tzinfo=timezone.utc)
-    # --- FIX ENDS HERE ---
-
-    current_time_utc = datetime.now(timezone.utc) # Get current UTC time once
-
-    if otp_expires_at < current_time_utc:
-        # Clear expired OTP
-        users_collection.update_one({"_id": user["_id"]}, {"$unset": {"email_otp": "", "otp_expires_at": ""}})
-        return False, "OTP has expired. Please request a new one."
-
-    if stored_otp == submitted_otp:
-        users_collection.update_one(
-            {"_id": user["_id"]},
-            {
-                "$set": {"status": STATUS_SUSPENDED, "updated_at": current_time_utc}, # Use consistent current time
-                "$unset": {"email_otp": "", "otp_expires_at": ""} 
-            }
+def backend_update_main_config(updated_config: dict):
+    """Saves the provided main configuration object to the database."""
+    global mongo_db_obj
+    if mongo_db_obj is None:
+        return False, "Database not connected. Config not saved.", updated_config
+    try:
+        mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].update_one(
+            {"_id": "singleton_config"}, {"$set": updated_config}, upsert=True
         )
-        return True, "Email confirmed successfully! Your account is now active."
-    else:
-        return False, "Invalid OTP entered."
+        return True, "Configuration saved successfully!", updated_config
+    except Exception as e:
+        print(f"ERROR: Could not save main config to DB: {e}")
+        return False, f"Error saving configuration: {e}", updated_config
 
-# Also, ensure in create_user and regenerate_otp_for_user, you are consistently using timezone-aware datetimes
-# for otp_expires_at when storing them. Your current code `datetime.now(timezone.utc) + timedelta(...)`
-# correctly creates timezone-aware datetimes. The issue is likely how PyMongo retrieves them.
+# ======================================================================================
+# ||                                                                                    ||
+# ||                              SCRAPER SOURCE CONFIG                                 ||
+# ||                                                                                    ||
+# ======================================================================================
 
-# Consider a small helper in get_all_users_from_db and other places fetching datetimes:
-def ensure_timezone_aware(dt_obj, default_tz=timezone.utc):
-    if isinstance(dt_obj, datetime):
-        if dt_obj.tzinfo is None:
-            return dt_obj.replace(tzinfo=default_tz)
-        return dt_obj # Already aware
-    return dt_obj # Not a datetime, return as is
+PREDEFINED_SCRAPER_SOURCES = [
+    {"source_key": "imy_se", "display_name": "IMY (Sweden)", "parameters": {"base_url_root": "https://www.imy.se", "listing_path_segment": "tillsyner", "pagination_query_format": "?query=&page=", "max_pages": 5, "pause_seconds": 1}},
+    {"source_key": "ico_uk", "display_name": "ICO (UK) - Enforcement", "parameters": {"base_url_root": "https://ico.org.uk", "listing_path_segment": "action-weve-taken/enforcement/", "pagination_query_format": "?page_num=", "max_pages": 3, "pause_seconds": 1}},
+    {"source_key": "dummy_source_1", "display_name": "Dummy News Site", "parameters": {"base_url_root": "https://www.example-news.com", "listing_path_segment": "articles/data-privacy", "pagination_query_format": "/page/", "max_pages": 2, "pause_seconds": 1}}
+]
 
-def regenerate_otp_for_user(email):
-    """
-    Regenerates an OTP for a user whose status is 'pending_email_confirmation'.
-    Returns: (new_otp_str_or_None, message_str)
-    """
-    db = get_auth_db()
-    if db is None: return None, "Database error."
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    email_lower = email.lower()
-    
-    # Find user and ensure they are in the correct state to receive a new OTP
-    user = users_collection.find_one({"email": email_lower})
-    if not user:
-        return None, "User not found."
-    if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
-        return None, "Account is not awaiting email confirmation (e.g., already active or suspended)."
+def get_predefined_scraper_sources_list():
+    """Returns a deep copy of the predefined scraper sources."""
+    return json.loads(json.dumps(PREDEFINED_SCRAPER_SOURCES))
 
-    new_otp = generate_otp()
-    new_otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
-    
+def load_scraper_config_from_db():
+    """Loads the scraper sources configuration list from MongoDB."""
+    global mongo_db_obj
+    if mongo_db_obj is None: return []
     try:
-        users_collection.update_one(
-            {"_id": user["_id"]}, # Use _id for precision
-            {"$set": {
-                "email_otp": new_otp,
-                "otp_expires_at": new_otp_expiry,
-                "updated_at": datetime.now(timezone.utc)
-            }}
+        config_doc = mongo_db_obj[SCRAPER_CONFIG_COLLECTION_NAME].find_one({"_id": "active_scraper_config"})
+        return config_doc.get("sources", []) if config_doc else []
+    except Exception as e:
+        print(f"ERROR: Could not load scraper config from DB: {e}")
+        return []
+
+def save_scraper_config_to_db(config_sources_list: list):
+    """Saves the entire scraper sources configuration list to MongoDB."""
+    global mongo_db_obj
+    if mongo_db_obj is None:
+        return False, "Database not connected."
+    try:
+        mongo_db_obj[SCRAPER_CONFIG_COLLECTION_NAME].update_one(
+            {"_id": "active_scraper_config"}, {"$set": {"sources": config_sources_list, "updated_at": time.time()}}, upsert=True
         )
-        print(f"OTP regenerated for {email_lower}.")
-        return new_otp, "A new OTP has been generated."
+        return True, "Scraper sources configuration saved."
     except Exception as e:
-        print(f"Error regenerating OTP for {email_lower}: {e}")
-        return None, "Failed to regenerate OTP."
+        print(f"ERROR: Could not save scraper config to DB: {e}")
+        return False, f"Error saving scraper sources config: {e}"
 
-# def confirm_user_email_in_db(email):
-#     """Confirms a user's email and sets status to 'pending_admin_approval'."""
-#     db = get_auth_db()
-#     if db is None: return False, "Database error."
-#     users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-#     user = users_collection.find_one({"email": email})
-#     if not user: return False, "User not found."
-    
-#     # Check current status for idempotency or incorrect state
-#     if user.get("status") == STATUS_SUSPENDED:
-#         return True, "Email already confirmed and pending admin approval."
-#     if user.get("status") == STATUS_ACTIVE:
-#         return True, "Email already confirmed and account is active."
-#     if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
-#         return False, f"Account is not awaiting email confirmation (current status: {user.get('status')})."
+# ======================================================================================
+# ||                                                                                    ||
+# ||                       INITIALIZATION & DATA PERSISTENCE                            ||
+# ||                                                                                    ||
+# ======================================================================================
 
-#     try:
-#         result = users_collection.update_one(
-#             {"email": email, "status": STATUS_PENDING_EMAIL_CONFIRMATION},
-#             {"$set": {"status": STATUS_SUSPENDED, "updated_at": datetime.now(timezone.utc)}}
-#         )
-#         if result.modified_count > 0:
-#             return True, "Email confirmed successfully. Your account is now pending admin approval."
-#         return False, "Email confirmation failed or user not in correct state."
-#     except Exception as e:
-#         print(f"Error confirming email for {email}: {e}")
-#         return False, "An error occurred during email confirmation."
-def get_full_user_for_auth(email):
-    """
-    Fetches the full user document, including sensitive fields like password
-    and TOTP secret, for authentication purposes.
-    USE WITH CAUTION and only in authentication flows.
-    """
-    db = get_auth_db()
-    if db is None:
-        print(f"Auth DB not available when fetching full user for {email}")
-        return None
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    return users_collection.find_one({"email": email.lower()})
-
-def get_user_by_email(email):
-    db = get_auth_db()
-    if db is None:
-        print("Error: MongoDB for auth not available. Cannot get user.")
-        return None
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    return users_collection.find_one({"email": email})
-
-def get_all_users_from_db():
-    # ... (ensure this function correctly fetches all users and converts timestamps to datetime) ...
-    # Make sure it returns the 'status' field as is from the DB.
-    # The renaming of 'pending' to 'pending_admin_approval' will be reflected here if the DB stores it that way.
-    db = get_auth_db()
-    if db is None: return []
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    try:
-        users_cursor = users_collection.find({})
-        users_list = []
-        for user_doc in users_cursor:
-            user_doc['_id'] = str(user_doc['_id'])
-            if 'password' in user_doc: del user_doc['password']
-            for ts_field in ["created_at", "updated_at", "last_login_at"]: # Add deleted_at
-                if ts_field in user_doc:
-                    if isinstance(user_doc[ts_field], (int, float)):
-                        user_doc[ts_field] = datetime.fromtimestamp(user_doc[ts_field], timezone.utc)
-                    elif isinstance(user_doc[ts_field], datetime) and user_doc[ts_field].tzinfo is None:
-                         user_doc[ts_field] = user_doc[ts_field].replace(tzinfo=timezone.utc)
-            if 'full_name' not in user_doc or not user_doc['full_name']:
-                user_doc['full_name'] = user_doc.get('email', "N/A").split('@')[0]
-            if 'totp_secret' in user_doc: del user_doc['totp_secret']
-            if 'recovery_codes' in user_doc: del user_doc['recovery_codes']
-            if 'used_recovery_codes' in user_doc: del user_doc['used_recovery_codes']
-            # You can include 'is_2fa_enabled'
-            user_doc['is_2fa_enabled'] = user_doc.get('is_2fa_enabled', False)
-            users_list.append(user_doc)
-        return users_list
-    except Exception as e:
-        print(f"Error fetching all users: {e}"); return []
-
-def update_user_status_in_db(user_email, new_status):
-    """Updates the status of a user in the database."""
-    db = get_auth_db()
-    if db is None: return False, "Database not connected."
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    
-    # Admin should only be able to set these statuses via the dropdown
-    admin_allowed_statuses = [STATUS_ACTIVE, STATUS_SUSPENDED]
-    if new_status not in admin_allowed_statuses:
-        return False, f"Invalid target status '{new_status}' for admin action."
-
-    current_user_state = users_collection.find_one({"email": user_email})
-    if not current_user_state:
-        return False, f"User with email '{user_email}' not found."
-
-    # Prevent setting to PENDING_EMAIL_CONFIRMATION or other non-admin-settable states
-    if new_status == STATUS_PENDING_EMAIL_CONFIRMATION: # Double check
-        return False, "Admin cannot set status to 'Pending Email Confirmation'."
-
-    try:
-        current_dt = datetime.now(timezone.utc)
-        update_fields = {"status": new_status, "updated_at": current_dt}
-
-        result = users_collection.update_one({"email": user_email}, {"$set": update_fields})
-        
-        if result.modified_count > 0:
-            return True, f"User '{user_email}' status updated to '{new_status}'."
-        elif result.matched_count == 1 and current_user_state.get("status") == new_status:
-             return True, f"User status for '{user_email}' was already '{new_status}'. No change made."
-        return False, f"User status for '{user_email}' could not be updated."
-    except Exception as e:
-        print(f"Error updating user status for {user_email}: {e}")
-        return False, "An error occurred while updating user status."
-
-def hard_delete_user_from_db(user_email): # <<< NEW FUNCTION
-    """Permanently deletes a user from the database by their email."""
-    db = get_auth_db()
-    if db is None:
-        return False, "Database not connected. User not deleted."
-
-    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
-    user_to_delete = users_collection.find_one({"email": user_email})
-
-    if not user_to_delete:
-        return False, f"User with email '{user_email}' not found. No deletion performed."
-
-    # IMPORTANT: Add checks here if there are users that should NEVER be hard-deleted
-    # e.g., if user_email is the APP_ADMIN_EMAIL. This check is also done in Flask.
-    # if user_email == "your_super_admin@example.com":
-    # return False, "This critical admin account cannot be hard deleted."
-
-    try:
-        result = users_collection.delete_one({"email": user_email})
-        if result.deleted_count == 1:
-            print(f"User '{user_email}' HARD DELETED successfully from the database.")
-            return True, f"User '{user_email}' has been permanently deleted."
-        else:
-            # This case means find_one found it, but delete_one didn't delete it.
-            # Highly unlikely if find_one worked, unless there's a race condition or replica set issue.
-            print(f"Warning: User '{user_email}' found but not hard deleted. Deleted count: {result.deleted_count}")
-            return False, f"User '{user_email}' was found but could not be deleted. Please check logs."
-    except Exception as e:
-        print(f"Error hard deleting user {user_email} from database: {e}")
-        return False, f"An error occurred while trying to permanently delete user '{user_email}'."
-
-# --- Dropbox Functions ---
-# ... (existing Dropbox functions: load_access_token, save_access_token, get_dropbox_access_token, get_valid_access_token, initialize_dropbox_client) ...
-def load_access_token():
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "r") as file: data = json.load(file); return data.get("access_token"), data.get("expires_at")
-    return None, None
-
-def save_access_token(access_token, expires_in):
-    expires_at = int(time.time()) + expires_in - 300
-    with open(TOKEN_FILE, "w") as file: json.dump({"access_token": access_token, "expires_at": expires_at}, file)
-
-def get_dropbox_access_token():
-    if not (DROPBOX_APP_KEY and DROPBOX_APP_SECRET and DROPBOX_REFRESH_TOKEN):
-        print("Error: Dropbox credentials (APP_KEY, APP_SECRET, REFRESH_TOKEN) not fully configured.")
-        return None
-    response = requests.post("https://api.dropbox.com/oauth2/token", data={"grant_type": "refresh_token", "refresh_token": DROPBOX_REFRESH_TOKEN}, auth=(DROPBOX_APP_KEY, DROPBOX_APP_SECRET))
-    if response.status_code == 200:
-        data = response.json()
-        save_access_token(data["access_token"], data.get("expires_in", 14400))
-        return data["access_token"]
-    else:
-        print(f"Failed to refresh Dropbox token: {response.text}")
-        return None
-
-def get_valid_access_token():
-    access_token, expires_at = load_access_token()
-    if access_token and expires_at and int(time.time()) < expires_at: return access_token
-    return get_dropbox_access_token()
+def initialize_mongodb_client():
+    global mongo_client_instance, mongo_db_obj, auth_mongo_db_obj
+    if MONGO_URI and mongo_client_instance is None:
+        try:
+            mongo_client_instance = MongoClient(MONGO_URI, server_api=server_api.ServerApi('1'))
+            mongo_client_instance.admin.command('ping') # Verify connection
+            mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] # For app data (FAISS, text_store)
+            auth_mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] # For auth data (admin_users)
+                                                                  # Using same DB, but conceptually could be different
+            print("MongoDB client initialized successfully.")
+        except Exception as e:
+            print(f"MongoDB connection failed: {e}")
+            mongo_client_instance = None; mongo_db_obj = None; auth_mongo_db_obj = None
+    elif not MONGO_URI:
+        print("Warning: MONGO_URI not set. MongoDB features disabled.")
 
 def initialize_dropbox_client():
     global dbx
@@ -640,28 +264,6 @@ def initialize_dropbox_client():
         print(f"Error connecting to Dropbox: {e}")
         dbx = None
 
-# --- MongoDB Functions (for app data) ---
-def initialize_mongodb_client():
-    global mongo_client_instance, mongo_db_obj, auth_mongo_db_obj
-    if MONGO_URI and mongo_client_instance is None:
-        try:
-            mongo_client_instance = MongoClient(MONGO_URI, server_api=server_api.ServerApi('1'))
-            mongo_client_instance.admin.command('ping') # Verify connection
-            mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] # For app data (FAISS, text_store)
-            auth_mongo_db_obj = mongo_client_instance[MONGO_DB_NAME] # For auth data (admin_users)
-                                                                  # Using same DB, but conceptually could be different
-            print("MongoDB client initialized successfully.")
-        except Exception as e:
-            print(f"MongoDB connection failed: {e}")
-            mongo_client_instance = None; mongo_db_obj = None; auth_mongo_db_obj = None
-    elif not MONGO_URI:
-        print("Warning: MONGO_URI not set. MongoDB features disabled.")
-    # else:
-        # print("MongoDB client already initialized or MONGO_URI not set.")
-
-
-# --- Data Persistence Functions (FAISS, text_store) ---
-# ... (existing: save_data_to_selected_db, load_data_from_selected_db) ...
 def save_data_to_selected_db(selected_db):
     global faiss_index, text_store, dbx, mongo_db_obj
 
@@ -839,21 +441,29 @@ def load_data_from_selected_db(selected_db):
     final_status_message = f"DB Load Status ({selected_db}): {alert_msg.strip()}"
     print(final_status_message)
     return final_status_message
+# ======================================================================================
+# ||                                                                                    ||
+# ||                         CORE AI, RAG & PDF PROCESSING                              ||
+# ||                                                                                    ||
+# ======================================================================================
 
-# --- PDF Processing ---
-# ... (existing: chunk_text, extract_text_from_pdf_bytes, process_and_add_pdf_core) ...
 def chunk_text(text, chunk_size=400, min_chunk_length=20):
-    paragraphs = re.split(r'\n{2,}', text); chunks = []
+    paragraphs = re.split(r'\n{2,}', text)
+    chunks = []
     for para in paragraphs:
-        sentences = re.split(r'(?<=[.!?])\s+', para); temp_chunk = ""
+        sentences = re.split(r'(?<=[.!?])\s+', para)
+        temp_chunk = ""
         for sentence in sentences:
-            if len(temp_chunk) + len(sentence) < chunk_size: temp_chunk += sentence + " "
+            if len(temp_chunk) + len(sentence) < chunk_size:
+                temp_chunk += sentence + " "
             else:
                 cleaned_chunk = temp_chunk.strip()
-                if len(cleaned_chunk) >= min_chunk_length: chunks.append(cleaned_chunk)
+                if len(cleaned_chunk) >= min_chunk_length:
+                    chunks.append(cleaned_chunk)
                 temp_chunk = sentence + " "
         cleaned_chunk = temp_chunk.strip()
-        if len(cleaned_chunk) >= min_chunk_length: chunks.append(cleaned_chunk)
+        if len(cleaned_chunk) >= min_chunk_length:
+            chunks.append(cleaned_chunk)
     return chunks
 
 def extract_text_from_pdf_bytes(pdf_bytes):
@@ -890,8 +500,18 @@ def process_and_add_pdf_core(pdf_bytes, file_name, selected_db):
         text_store.append({"text": chunk_text_content, "file_name": file_name, "file_hash": file_hash})
     return f"Processed and added '{file_name}'. Chunks: {len(chunks)}, Index size: {faiss_index.ntotal}", True
 
-# --- AI Response Generation ---
-# ... (existing: generate_response_gemini, generate_response_together_ai, generate_response_openai_api) ...
+def retrieve_context_from_db(query, top_k=5):
+    if embedding_model is None or faiss_index is None or faiss_index.ntotal == 0:
+        return "No documents are available for context retrieval."
+    try:
+        query_embedding = embedding_model.encode([query])
+        _, indices = faiss_index.search(np.array(query_embedding).astype("float32"), top_k)
+        retrieved_texts = [text_store[i]["text"] for i in indices[0] if 0 <= i < len(text_store)]
+        return "\n\n".join(retrieved_texts) if retrieved_texts else "No relevant context found."
+    except Exception as e:
+        print(f"ERROR during context retrieval: {e}")
+        return "An error occurred while retrieving context."
+
 def generate_response_gemini(prompt, context, temp, top_p, system_prompt):
     if not gemini_model_genai: return "Gemini client not initialized."
     input_parts = [system_prompt + "\nContext: " + context, "Question: " + prompt]
@@ -919,237 +539,88 @@ def generate_response_openai_api(prompt, context, temp, top_p, system_prompt):
         return response.choices[0].message.content
     except Exception as e: return f"OpenAI Error: {e}"
 
-# --- RAG ---
-# ... (existing: retrieve_context_from_db) ...
-def retrieve_context_from_db(query, top_k=5):
-    global text_store, faiss_index, embedding_model
-    if embedding_model is None: return "Embedding model not initialized for RAG."
-    if faiss_index is None or faiss_index.ntotal == 0: return "No documents indexed."
-    
-    query_embedding = embedding_model.encode([query])
-    query_embedding_np = np.array(query_embedding).astype("float32")
-    
-    if query_embedding_np.shape[1] != faiss_index.d:
-        return f"Query embedding dimension ({query_embedding_np.shape[1]}) does not match FAISS index dimension ({faiss_index.d})."
+# ======================================================================================
+# ||                                                                                    ||
+# ||                        UI-FACING BACKEND CALLBACKS                                 ||
+# ||                                                                                    ||
+# ======================================================================================
 
-    distances, indices = faiss_index.search(query_embedding_np, top_k)
-    
-    valid_indices = [i for i in indices[0] if 0 <= i < len(text_store)]
-    retrieved_texts = [text_store[idx]["text"] for idx in valid_indices if isinstance(text_store[idx], dict) and "text" in text_store[idx]]
-    return "\n\n".join(retrieved_texts) if retrieved_texts else "No relevant context found."
-
-
-# --- Web Scraping ---
-# ... (existing web scraping functions) ...
-async def fetch_page_async(url):
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, timeout=30.0, follow_redirects=True)
-        response.raise_for_status() 
-        return response.text, str(response.url)
-
-async def extract_pdf_links_from_url_async(url):
-    try:
-        html, base_url_resolved = await fetch_page_async(url)
-        soup = BeautifulSoup(html, "html.parser")
-        return [urljoin(base_url_resolved, a["href"]) for a in soup.find_all("a", href=True) if ".pdf" in a["href"].lower()]
-    except Exception as e:
-        print(f"Error scraping {url} for PDF links: {e}")
-        return []
-
-async def process_scraped_pdf_links_async(urls):
-    all_pdf_links = set()
-    tasks = [extract_pdf_links_from_url_async(u) for u in urls]
-    for url_group in await asyncio.gather(*tasks):
-        all_pdf_links.update(url_group)
-    return list(all_pdf_links)
-
-async def download_and_process_scraped_pdf(session, pdf_link, selected_db):
-    try:
-        async with session.get(pdf_link, timeout=60) as response:
-            if response.status == 200:
-                pdf_bytes = await response.read()
-                filename = os.path.basename(pdf_link)
-                status_msg, success = process_and_add_pdf_core(pdf_bytes, filename, selected_db) 
-                return status_msg, success, filename
-            return f"Failed to download {pdf_link} (status: {response.status})", False, os.path.basename(pdf_link)
-    except Exception as e:
-        return f"Error processing {pdf_link}: {e}", False, os.path.basename(pdf_link)
-
-async def batch_download_and_process_pdfs(pdf_links, selected_db):
-    results = []
-    connector = aiohttp.TCPConnector(ssl=False) 
-    async with aiohttp.ClientSession(connector=connector) as session:
-        tasks = [download_and_process_scraped_pdf(session, link, selected_db) for link in pdf_links]
-        for result in await asyncio.gather(*tasks):
-            results.append(result)
-    return results
-
-def get_page_items_sync(url, base_url_val, listing_endpoint_val):
-    try:
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser"); items = set()
-        for item in soup.find_all("a"):
-            link = item.get("href")
-            if link and f"/{listing_endpoint_val}/" in link and link != url and not link.endswith("/rss"):
-                if not link.startswith("http"): link = urljoin(base_url_val, link)
-                items.add(link)
-        return list(items)
-    except Exception as e: print(f"Error scraping page items {url}: {e}"); return []
-
-def get_all_page_urls_for_scraping(base_url_val, listing_endpoint_val, pagination_format_val, num_pages_val):
-    all_page_urls_to_scrape = set()
-    for page_num in range(1, int(num_pages_val) + 1):
-        url_path = f"{listing_endpoint_val}/{pagination_format_val}{page_num}"
-        url = urljoin(base_url_val + ("/" if not base_url_val.endswith("/") else ""), url_path)
-        page_items = get_page_items_sync(url, base_url_val, listing_endpoint_val)
-        if not page_items and page_num > 1 : 
-            print(f"No items found on page {page_num} ({url}), stopping pagination.")
-            break
-        all_page_urls_to_scrape.update(page_items)
-        if not page_items and page_num == 1: 
-             print(f"No items found on the first page ({url}). Check scraper settings.")
-             break
-    return list(all_page_urls_to_scrape)
-
-# --- UI Callable Backend Functions ---
-# ... (existing: get_unique_filenames_from_text_store, _build_file_list_updates, etc.) ...
 def get_unique_filenames_from_text_store():
-    global text_store
     if not text_store: return []
-    unique_files = {} 
-    for item in text_store:
-        if isinstance(item, dict) and 'file_hash' in item and 'file_name' in item:
-            if item["file_hash"] not in unique_files:
-                unique_files[item["file_hash"]] = item["file_name"]
-    return sorted(list(unique_files.values()))
+    return sorted(list({item["file_name"] for item in text_store if "file_name" in item}))
 
-def _build_file_list_updates():
-    filenames = get_unique_filenames_from_text_store()
-    md_output = "#### Current Files in Database\n---\n"
-    if filenames:
-        for f_name in filenames: md_output += f"- {f_name}\n"
-    else: md_output += "_No files currently in this database._\n"
-    checkbox_group_update = gradio.update(choices=filenames, value=[]) 
-    markdown_update = gradio.update(value=md_output)
-    return checkbox_group_update, markdown_update
-
-def get_current_file_list_md_backend():
-    _ , md_update = _build_file_list_updates()
-    return md_update.get('value', "_Error generating file list._")
-
-def update_app_config_backend(models_names, vary_t, temp, vary_p, top_p, sys_prompt, current_app_config_state):
-    selected_model_ids = [MODEL_NAME_TO_ID_MAP[name] for name in models_names if name in MODEL_NAME_TO_ID_MAP]
-    if len(selected_model_ids) > 3: selected_model_ids = selected_model_ids[:3]
-    
-    current_app_config_state.update({
-        "selected_models": selected_model_ids,
-        "vary_temperature": vary_t, "temperature": temp,
-        "vary_top_p": vary_p, "top_p": top_p,
-        "system_prompt": sys_prompt
-    })
-    return "Configuration updated.", current_app_config_state
-
-def switch_db_backend(selected_db_val, current_selected_db_state_value): 
+def switch_db_backend(selected_db_val, current_selected_db_state_value):
     if selected_db_val == current_selected_db_state_value:
-        db_status_msg = f"Already using {selected_db_val}. No change."
-    else:
-        db_status_msg = load_data_from_selected_db(selected_db_val)
-    cb_update, md_update = _build_file_list_updates()
-    return selected_db_val, db_status_msg, cb_update, md_update
+        return selected_db_val, f"Already using {selected_db_val}.", gr.update()
+    status = load_data_from_selected_db(selected_db_val)
+    return selected_db_val, status, gr.update(choices=get_unique_filenames_from_text_store(), value=[])
 
 def handle_pdf_upload_backend(files_obj_list, selected_db_from_state):
-    if files_obj_list is None:
-        cb_update, md_update = _build_file_list_updates()
-        return "No files uploaded.", cb_update, md_update
-    alerts = []
-    any_successful_upload = False
-    for file_obj in files_obj_list:
-        file_path = file_obj.name 
-        file_display_name = os.path.basename(getattr(file_obj, 'orig_name', file_path))
-        with open(file_path, 'rb') as f: pdf_bytes = f.read()
-        status_msg, success = process_and_add_pdf_core(pdf_bytes, file_display_name, selected_db_from_state)
-        alerts.append(status_msg)
-        if success: any_successful_upload = True
-    if any_successful_upload: save_data_to_selected_db(selected_db_from_state)
-    status_summary = "\n".join(alerts)
-    cb_update, md_update = _build_file_list_updates()
-    return status_summary, cb_update, md_update
-
+    if not files_obj_list:
+        return "No files were uploaded.", gr.update()
+    alerts = [process_and_add_pdf_core(open(f.name, "rb").read(), os.path.basename(f.name), selected_db_from_state)[0] for f in files_obj_list]
+    save_data_to_selected_db(selected_db_from_state)
+    return "\n".join(alerts), gr.update(choices=get_unique_filenames_from_text_store(), value=[])
 
 def delete_files_backend(filenames_to_delete, selected_db):
-    global text_store, faiss_index, embedding_model
+    global text_store, faiss_index
     if not filenames_to_delete:
-        cb_update, md_update = _build_file_list_updates()
-        return "No files selected for deletion.", cb_update, md_update
-    if embedding_model is None or faiss_index is None:
-        cb_update, md_update = _build_file_list_updates()
-        return "Error: Core components not ready. Deletion aborted.", cb_update, md_update
-    kept_text_store_entries_with_original_indices = []
-    for i, item in enumerate(text_store):
-        if isinstance(item, dict) and item.get("file_name") not in filenames_to_delete:
-            kept_text_store_entries_with_original_indices.append((i, item))
-    if len(kept_text_store_entries_with_original_indices) == len(text_store):
-        cb_update, md_update = _build_file_list_updates()
-        return "Selected files not found or no changes made.", cb_update, md_update
-    new_text_store = [item for _, item in kept_text_store_entries_with_original_indices]
-    new_faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
-    if kept_text_store_entries_with_original_indices:
-        original_indices_to_keep = [original_idx for original_idx, _ in kept_text_store_entries_with_original_indices]
-        valid_original_indices_to_keep = [idx for idx in original_indices_to_keep if idx < faiss_index.ntotal]
-        if valid_original_indices_to_keep:
-            vectors_to_keep = faiss_index.reconstruct_n(0, faiss_index.ntotal)
-            kept_vectors = vectors_to_keep[valid_original_indices_to_keep, :]
-            if kept_vectors.shape[0] > 0: new_faiss_index.add(kept_vectors.astype("float32"))
-        else: print("Warning: No valid vectors to keep after filtering indices for deletion.")
-    text_store = new_text_store
-    faiss_index = new_faiss_index
+        return "No files selected for deletion.", gr.update()
+    initial_len = len(text_store)
+    indices_to_remove = {i for i, item in enumerate(text_store) if item.get("file_name") in filenames_to_delete}
+    if not indices_to_remove:
+        return "Selected files not found.", gr.update()
+    
+    faiss_index.remove_ids(np.array(list(indices_to_remove)))
+    text_store = [item for i, item in enumerate(text_store) if i not in indices_to_remove]
     save_data_to_selected_db(selected_db)
-    num_deleted = len(filenames_to_delete)
-    status_msg = f"Successfully deleted {num_deleted} file(s) and their associated data. Index rebuilt."
-    cb_update, md_update = _build_file_list_updates()
-    return status_msg, cb_update, md_update
+    return f"Deleted {len(filenames_to_delete)} file(s) and their {len(indices_to_remove)} chunks.", gr.update(choices=get_unique_filenames_from_text_store(), value=[])
 
-def apply_uploaded_config_backend(config_file_obj, current_app_config_state_dict):
+def backend_apply_uploaded_main_config(config_file_obj):
     if config_file_obj is None:
-        return "No config file uploaded.", False, current_app_config_state_dict, *[gradio.update()]*6
+        return "No config file uploaded.", False, backend_get_initial_main_config()
     try:
-        with open(config_file_obj.name, 'r') as f: new_config = json.load(f)
-        current_app_config_state_dict.update(new_config)
-        sel_model_ids = current_app_config_state_dict.get("selected_models", [])
-        model_names_for_ui = [MODEL_ID_TO_NAME_MAP[mid] for mid in sel_model_ids if mid in MODEL_ID_TO_NAME_MAP]
-        return (
-            "Configuration loaded successfully from file.", True,
-            current_app_config_state_dict,
-            gradio.update(value=model_names_for_ui),
-            gradio.update(value=current_app_config_state_dict.get("vary_temperature", True)),
-            gradio.update(value=current_app_config_state_dict.get("temperature", 0.7)),
-            gradio.update(value=current_app_config_state_dict.get("vary_top_p", False)),
-            gradio.update(value=current_app_config_state_dict.get("top_p", 0.9)),
-            gradio.update(value=current_app_config_state_dict.get("system_prompt", ""))
-        )
+        with open(config_file_obj.name, 'r', encoding='utf-8') as f:
+            new_config = json.load(f)
+        if "model_config" not in new_config or "cron_schedule" not in new_config:
+            raise ValueError("Uploaded config is missing required keys.")
+        success, msg, final_config = backend_update_main_config(new_config)
+        return "Config applied from file." if success else msg, success, final_config
     except Exception as e:
-        error_msg = f"Error loading config: {e}"
-        return error_msg, False, current_app_config_state_dict, *[gradio.update()]*6
+        return f"Error applying config: {e}", False, backend_get_initial_main_config()
 
-def generate_config_for_download_backend(current_app_config_state_dict):
+def backend_generate_main_config_for_download(current_main_config: dict):
     try:
-        config_to_download = { # Only saving a subset, not the full model list.
-            "vary_temperature": current_app_config_state_dict.get("vary_temperature", True),
-            "temperature": current_app_config_state_dict.get("temperature", 0.7),
-            "vary_top_p": current_app_config_state_dict.get("vary_top_p", False),
-            "top_p": current_app_config_state_dict.get("top_p", 0.9),
-            "system_prompt": current_app_config_state_dict.get("system_prompt", "You are a helpful assistant."),
-            "selected_models": current_app_config_state_dict.get("selected_models", []) # Saving selected model IDs
-        }
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding='utf-8') as tmp_file:
-            json.dump(config_to_download, tmp_file, indent=2)
-            tmp_file_path = tmp_file.name
-        return tmp_file_path, "Config ready for download.", True
+            json.dump(current_main_config, tmp_file, indent=2)
+            return tmp_file.name
     except Exception as e:
-        return None, f"Error generating config file for download: {e}", False
+        print(f"ERROR: Could not generate config for download: {e}")
+        return None
 
-# In backend.py
+def get_scraper_ui_initial_data():
+    return get_predefined_scraper_sources_list(), load_scraper_config_from_db()
+
+def backend_update_scraper_source_in_db(source_key, display_name, new_params):
+    current_config = load_scraper_config_from_db()
+    found = False
+    for i, source in enumerate(current_config):
+        if source.get("source_key") == source_key:
+            current_config[i].update({"parameters": new_params, "display_name": display_name})
+            found = True
+            break
+    if not found:
+        current_config.append({"source_key": source_key, "display_name": display_name, "parameters": new_params})
+    success, msg = save_scraper_config_to_db(current_config)
+    return current_config, f"Source '{display_name}' updated: {msg}" if success else f"Failed to update '{display_name}': {msg}"
+
+def backend_remove_scraper_source_from_db(source_key_to_remove: str):
+    current_config = load_scraper_config_from_db()
+    updated_config = [s for s in current_config if s.get("source_key") != source_key_to_remove]
+    if len(updated_config) == len(current_config):
+        return updated_config, f"Source key '{source_key_to_remove}' not found."
+    success, msg = save_scraper_config_to_db(updated_config)
+    return updated_config, f"Source removed." if success else f"Failed to remove source: {msg}"
 
 def chat_interface_backend(
     user_input: str,
@@ -1157,20 +628,7 @@ def chat_interface_backend(
     selected_db_state_val: str,
     model_config_dict: dict
 ) -> list[list[str | None]]:
-    """
-    Handles the chat logic by retrieving context, generating responses from selected AI models,
-    and updating the chat history.
 
-    Args:
-        user_input: The question asked by the user.
-        chat_history: The existing conversation history.
-        selected_db_state_val: The currently active database ('MongoDB' or 'Dropbox').
-        model_config_dict: The 'model_config' portion of the main application configuration,
-                           containing temperature, top_p, selected models, etc.
-
-    Returns:
-        The updated chat history.
-    """
     if not user_input or not user_input.strip():
         return chat_history if chat_history is not None else []
 
@@ -1245,58 +703,407 @@ def chat_interface_backend(
     current_chat_history.append([user_input, final_bot_response])
     return current_chat_history
 
-# --- End of backend.py relevant section ---
+def get_backend_initial_load_message():
+    global BACKEND_INITIAL_LOAD_MSG
+    return BACKEND_INITIAL_LOAD_MSG
 
-def run_scraper_backend(base_url, endpoint, pagination, num_pages, selected_db_val):
-    if sys.platform == "win32" and isinstance(asyncio.get_event_loop_policy(), asyncio.WindowsSelectorEventLoopPolicy):
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    status_updates = ["Starting scraping..."]
-    page_urls_to_scan = get_all_page_urls_for_scraping(base_url, endpoint, pagination, num_pages)
-    status_updates.append(f"Found {len(page_urls_to_scan)} site pages to scan for PDF links.")
-    any_successful_scrape_process = False
-    if page_urls_to_scan:
-        pdf_links_found = asyncio.run(process_scraped_pdf_links_async(page_urls_to_scan))
-        status_updates.append(f"Found {len(pdf_links_found)} unique PDF links.")
-        if pdf_links_found:
-            status_updates.append(f"Starting PDF download and processing for {len(pdf_links_found)} links...")
-            processing_results = asyncio.run(batch_download_and_process_pdfs(pdf_links_found, selected_db_val))
-            success_count = 0; processed_files_messages = []
-            for msg, success, fname in processing_results:
-                processed_files_messages.append(f"{fname}: {msg} ({'Success' if success else 'Failed'})")
-                if success: success_count += 1; any_successful_scrape_process = True
-            status_updates.append(f"\n--- PDF Processing Results ---"); status_updates.extend(processed_files_messages)
-            status_updates.append(f"\nScraping finished. Processed {success_count} new PDFs out of {len(pdf_links_found)} found.")
-    else: status_updates.append("No site pages found to scan based on current settings.")
-    if any_successful_scrape_process: save_data_to_selected_db(selected_db_val)
-    cb_update, md_update = _build_file_list_updates()
-    return "\n".join(status_updates), cb_update, md_update
+# ======================================================================================
+# ||                                                                                    ||
+# ||          REQUIRED IMPORTS & CONSTANTS (Ensure these are at the top)                ||
+# ||                                                                                    ||
+# ======================================================================================
+
+# --- User Status Constants (should be defined in your file) ---
+STATUS_PENDING_EMAIL_CONFIRMATION = "pending_email_confirmation"
+STATUS_ACTIVE = "active"
+STATUS_SUSPENDED = "suspended"
+
+# This helper function is assumed to exist and work correctly
+def get_auth_db():
+    # ... your existing logic to get a MongoDB database object ...
+    global auth_mongo_db_obj
+    return auth_mongo_db_obj
+
+# ======================================================================================
+# ||                                                                                    ||
+# ||                     AUTHENTICATION & 2FA HELPER FUNCTIONS                          ||
+# ||                                                                                    ||
+# ======================================================================================
+
+def get_full_user_for_auth(email):
+    """
+    Fetches the full user document, including sensitive fields like password
+    and TOTP secret, for authentication purposes.
+    USE WITH CAUTION and only in authentication flows.
+    """
+    db = get_auth_db()
+    if db is None:
+        print(f"Auth DB not available when fetching full user for {email}")
+        return None
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    return users_collection.find_one({"email": email.lower()})
+
+def get_user_by_email(email):
+    db = get_auth_db()
+    if db is None:
+        print("Error: MongoDB for auth not available. Cannot get user.")
+        return None
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    return users_collection.find_one({"email": email})
+
+def get_all_users_from_db():
+    # ... (ensure this function correctly fetches all users and converts timestamps to datetime) ...
+    # Make sure it returns the 'status' field as is from the DB.
+    # The renaming of 'pending' to 'pending_admin_approval' will be reflected here if the DB stores it that way.
+    db = get_auth_db()
+    if db is None: return []
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    try:
+        users_cursor = users_collection.find({})
+        users_list = []
+        for user_doc in users_cursor:
+            user_doc['_id'] = str(user_doc['_id'])
+            if 'password' in user_doc: del user_doc['password']
+            for ts_field in ["created_at", "updated_at", "last_login_at"]: # Add deleted_at
+                if ts_field in user_doc:
+                    if isinstance(user_doc[ts_field], (int, float)):
+                        user_doc[ts_field] = datetime.fromtimestamp(user_doc[ts_field], timezone.utc)
+                    elif isinstance(user_doc[ts_field], datetime) and user_doc[ts_field].tzinfo is None:
+                         user_doc[ts_field] = user_doc[ts_field].replace(tzinfo=timezone.utc)
+            if 'full_name' not in user_doc or not user_doc['full_name']:
+                user_doc['full_name'] = user_doc.get('email', "N/A").split('@')[0]
+            if 'totp_secret' in user_doc: del user_doc['totp_secret']
+            if 'recovery_codes' in user_doc: del user_doc['recovery_codes']
+            if 'used_recovery_codes' in user_doc: del user_doc['used_recovery_codes']
+            # You can include 'is_2fa_enabled'
+            user_doc['is_2fa_enabled'] = user_doc.get('is_2fa_enabled', False)
+            users_list.append(user_doc)
+        return users_list
+    except Exception as e:
+        print(f"Error fetching all users: {e}"); return []
+
+def set_user_totp_secret(email, totp_secret):
+    """Stores the TOTP secret for a user (usually before it's fully enabled)."""
+    db = get_auth_db()
+    if db is None:  # <<< CORRECTED CHECK
+        print("Error: Auth DB not available in set_user_totp_secret.")
+        return False, "Database connection error. Failed to set TOTP secret."
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    try:
+        result = users_collection.update_one(
+            {"email": email.lower()},
+            {"$set": {"totp_secret": totp_secret, "is_2fa_enabled": False, "updated_at": datetime.now(timezone.utc)}}
+        )
+        if result.modified_count > 0 or result.matched_count > 0 : # matched_count in case it was already set to the same
+            return True, "TOTP secret set/updated."
+        else: # User not found
+            return False, "User not found. Failed to set TOTP secret."
+    except Exception as e:
+        print(f"Error in set_user_totp_secret for {email}: {e}")
+        return False, "Database operation error."
+
+def enable_user_2fa(email):
+    """Enables 2FA for the user, stores hashed recovery codes, and marks initial login as complete."""
+    db = get_auth_db()
+    if db is None:  # <<< CORRECTED CHECK
+        print("Error: Auth DB not available in enable_user_2fa.")
+        return False, "Database connection error. Failed to enable 2FA."
+    
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    email_lower = email.lower() # Ensure consistent casing
+    user = users_collection.find_one({"email": email_lower})
+
+    if not user: # Added check for user existence
+        print(f"Error: User {email_lower} not found in enable_user_2fa.")
+        return False, "User not found. Cannot enable 2FA."
+        
+    if not user.get("totp_secret"): # Prerequisite check
+        print(f"Error: TOTP secret not set for {email_lower} before enabling 2FA.")
+        return False, "Cannot enable 2FA: Critical setup step (TOTP secret) missing."
+
+    try:
+        result = users_collection.update_one(
+            {"email": email_lower}, # Use email_lower here too
+            {"$set": {
+                "is_2fa_enabled": True,
+                "has_completed_initial_login": True, 
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        if result.modified_count > 0:
+            print(f"2FA enabled for user {email_lower}.")
+            return True, "2FA enabled successfully."
+        elif result.matched_count > 0 and user.get("is_2fa_enabled") is True: # Already enabled with same codes?
+            print(f"2FA was already enabled for {email_lower}, considered success.")
+            return True, "2FA was already enabled." # Or a more specific message
+        else:
+            print(f"Failed to enable 2FA for {email_lower}. Matched: {result.matched_count}, Modified: {result.modified_count}")
+            return False, "Failed to update record to enable 2FA."
+            
+    except Exception as e:
+        print(f"Database error in enable_user_2fa for {email_lower}: {e}")
+        return False, "Database operation error during 2FA enabling."
+
+def verify_totp_code(totp_secret, submitted_code):
+    """Verifies a TOTP code against the user's secret."""
+    if not totp_secret or not submitted_code:
+        return False
+    totp = pyotp.TOTP(totp_secret)
+    return totp.verify(submitted_code, valid_window=1) # Allow current, previous, and next window (e.g., +/- 30s)
+
+# ======================================================================================
+# ||                                                                                    ||
+# ||                  NEW USER REGISTRATION & EMAIL VERIFICATION                        ||
+# ||                                                                                    ||
+# ======================================================================================
+def create_user(email, plain_password):
+    """
+    Creates a new user with 'pending_email_confirmation' status,
+    generates an OTP, and stores it.
+    Returns: (success_bool, message_str, otp_str_or_None)
+    """
+    db = get_auth_db()
+    if db is None:
+        return False, "Database error, please try again later.", None
+    
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    email_lower = email.lower()
+    existing_user = users_collection.find_one({"email": email_lower})
+    current_dt = datetime.now(timezone.utc)
+    
+    otp = generate_otp()
+    otp_expiry = current_dt + timedelta(minutes=10) # OTP valid for 10 minutes
+
+    if existing_user:
+        if existing_user.get("status") == STATUS_PENDING_EMAIL_CONFIRMATION:
+            # User exists but email not confirmed. Update password, regenerate OTP.
+            hashed_pass = hash_password(plain_password)
+            users_collection.update_one(
+                {"email": email_lower},
+                {"$set": {
+                    "password": hashed_pass,
+                    "updated_at": current_dt,
+                    "created_at": current_dt, # Optionally refresh for new OTP window
+                    "email_otp": otp,          # Update OTP
+                    "otp_expires_at": otp_expiry # Update OTP expiry
+                }}
+            )
+            print(f"User {email_lower} re-attempted signup. OTP regenerated.")
+            return True, "An OTP has been re-sent to your email.", otp
+        else: # User exists and is in another state (active, suspended)
+            return False, "Email address already registered and confirmed or in another state.", None
+
+    hashed_pass = hash_password(plain_password)
+    try:
+        user_doc_fields = {
+            "email": email_lower,
+            "password": hashed_pass,
+            "role": "user",
+            "status": STATUS_PENDING_EMAIL_CONFIRMATION,
+            "created_at": current_dt,
+            "updated_at": current_dt,
+            "full_name": email_lower.split('@')[0],
+            "email_otp": otp,
+            "otp_expires_at": otp_expiry,
+            "has_completed_initial_login": False, # << NEW
+            "is_2fa_enabled": False,       # << NEW: 2FA status
+            "totp_secret": None
+        }
+        users_collection.insert_one(user_doc_fields)
+        print(f"User {email_lower} registered with {STATUS_PENDING_EMAIL_CONFIRMATION} status. OTP generated.")
+        return True, "User record created. An OTP has been sent to your email.", otp
+    except Exception as e:
+        print(f"Error creating user {email_lower}: {e}")
+        return False, "An error occurred during registration.", None
+
+def verify_otp_and_activate_user(email, submitted_otp):
+    """
+    Verifies the submitted OTP for the given email and activates the user if valid.
+    Returns: (success_bool, message_str)
+    """
+    db = get_auth_db()
+    if db is None: return False, "Database error."
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    email_lower = email.lower()
+    user = users_collection.find_one({"email": email_lower})
+
+    if not user: return False, "User not found."
+    if user.get("status") == STATUS_SUSPENDED: return True, "Account already created."
+
+    if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
+        return False, "Account not awaiting email confirmation."
+
+    stored_otp = user.get("email_otp")
+    otp_expires_at = user.get("otp_expires_at") 
+
+    if not stored_otp or not otp_expires_at:
+        return False, "OTP not found or has an issue. Please request a new one."
+    
+    # --- FIX STARTS HERE ---
+    # Ensure otp_expires_at is a datetime object and make it timezone-aware (assuming UTC)
+    if not isinstance(otp_expires_at, datetime):
+        # This case should ideally not happen if you store datetime objects.
+        # If it's a string or timestamp, you'd need to parse it first.
+        # For example, if it was a Unix timestamp (float):
+        # otp_expires_at = datetime.fromtimestamp(otp_expires_at, timezone.utc)
+        print(f"ERROR: otp_expires_at for {email_lower} is not a datetime object from DB: {type(otp_expires_at)}")
+        return False, "Internal error with OTP expiry format. Please try again."
+
+    if otp_expires_at.tzinfo is None:
+        # If it's naive, assume it was stored as UTC and make it UTC-aware
+        otp_expires_at = otp_expires_at.replace(tzinfo=timezone.utc)
+    # --- FIX ENDS HERE ---
+
+    current_time_utc = datetime.now(timezone.utc) # Get current UTC time once
+
+    if otp_expires_at < current_time_utc:
+        # Clear expired OTP
+        users_collection.update_one({"_id": user["_id"]}, {"$unset": {"email_otp": "", "otp_expires_at": ""}})
+        return False, "OTP has expired. Please request a new one."
+
+    if stored_otp == submitted_otp:
+        users_collection.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {"status": STATUS_SUSPENDED, "updated_at": current_time_utc}, # Use consistent current time
+                "$unset": {"email_otp": "", "otp_expires_at": ""} 
+            }
+        )
+        return True, "Email confirmed successfully! Your account is now active."
+    else:
+        return False, "Invalid OTP entered."
+
+def regenerate_otp_for_user(email):
+    """
+    Regenerates an OTP for a user whose status is 'pending_email_confirmation'.
+    Returns: (new_otp_str_or_None, message_str)
+    """
+    db = get_auth_db()
+    if db is None: return None, "Database error."
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    email_lower = email.lower()
+    
+    # Find user and ensure they are in the correct state to receive a new OTP
+    user = users_collection.find_one({"email": email_lower})
+    if not user:
+        return None, "User not found."
+    if user.get("status") != STATUS_PENDING_EMAIL_CONFIRMATION:
+        return None, "Account is not awaiting email confirmation (e.g., already active or suspended)."
+
+    new_otp = generate_otp()
+    new_otp_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
+    
+    try:
+        users_collection.update_one(
+            {"_id": user["_id"]}, # Use _id for precision
+            {"$set": {
+                "email_otp": new_otp,
+                "otp_expires_at": new_otp_expiry,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        print(f"OTP regenerated for {email_lower}.")
+        return new_otp, "A new OTP has been generated."
+    except Exception as e:
+        print(f"Error regenerating OTP for {email_lower}: {e}")
+        return None, "Failed to regenerate OTP."
 
 
-# In backend.py
+# ======================================================================================
+# ||                                                                                    ||
+# ||                            ADMIN PANEL USER MANAGEMENT                             ||
+# ||                                                                                    ||
+# ======================================================================================
 
-# --- CORRECTED initialize_all_components ---
+
+def update_user_status_in_db(user_email: str, new_status: str) -> tuple[bool, str]:
+    """
+    Allows an admin to update a user's status to 'active' or 'suspended'.
+
+    Args:
+        user_email: The email of the user to update.
+        new_status: The target status (must be 'active' or 'suspended').
+
+    Returns:
+        A tuple containing a success boolean and a status message.
+    """
+    db = get_auth_db()
+    if db is None: return False, "Database not connected."
+    
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    admin_allowed_statuses = [STATUS_ACTIVE, STATUS_SUSPENDED]
+    
+    if new_status not in admin_allowed_statuses:
+        return False, f"Invalid target status '{new_status}' for admin action."
+
+    try:
+        result = users_collection.update_one(
+            {"email": user_email.lower()},
+            {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc)}}
+        )
+        if result.matched_count == 0:
+            return False, f"User '{user_email}' not found."
+        if result.modified_count == 0:
+            return True, f"User '{user_email}' was already set to '{new_status}'."
+        return True, f"User '{user_email}' status successfully updated to '{new_status}'."
+    except Exception as e:
+        print(f"ERROR updating user status for {user_email}: {e}")
+        return False, "An internal database error occurred."
+
+def hard_delete_user_from_db(user_email: str) -> tuple[bool, str]:
+    """
+    Permanently deletes a user from the database. This action is irreversible.
+
+    Args:
+        user_email: The email of the user to permanently delete.
+
+    Returns:
+        A tuple containing a success boolean and a status message.
+    """
+    db = get_auth_db()
+    if db is None:
+        return False, "Database not connected."
+    
+    users_collection = db[ADMIN_USERS_COLLECTION_NAME]
+    try:
+        result = users_collection.delete_one({"email": user_email.lower()})
+        if result.deleted_count == 1:
+            print(f"User '{user_email}' has been permanently deleted.")
+            return True, f"User '{user_email}' has been permanently deleted."
+        else:
+            return False, f"User '{user_email}' not found for deletion."
+    except Exception as e:
+        print(f"ERROR during hard delete for user {user_email}: {e}")
+        return False, "An internal database error occurred during deletion."
+    
+# ======================================================================================
+# ||                                                                                    ||
+# ||                              BACKEND INITIALIZATION                                ||
+# ||                                                                                    ||
+# ======================================================================================
+
 def initialize_all_components(default_db="MongoDB"):
     """Initializes all backend components in the correct order."""
     global gemini_model_genai, together_client, openai_client, embedding_model, faiss_index, BACKEND_INITIAL_LOAD_MSG, mongo_client_instance, mongo_db_obj
 
     print("--- Backend Initialization Started ---")
-    if mongo_client_instance is None:
-        initialize_mongodb_client()
     
-    # CORRECTED CHECK: Use 'is not None'
+    print("Step 1: Initializing Database Client...")
+    initialize_mongodb_client()
+    
+    print("Step 2: Verifying Configurations...")
     if mongo_db_obj is not None:
-        print("Verifying main application configuration in DB...")
         backend_get_initial_main_config()
         if not load_scraper_config_from_db():
-             print("No scraper source config found, initializing with defaults.")
+             print("  - No scraper source config found, initializing with defaults.")
              default_sources = get_predefined_scraper_sources_list()
              if default_sources:
                  save_scraper_config_to_db([default_sources[0]])
-                 print(f"Saved default scraper source '{default_sources[0]['display_name']}' to DB.")
+                 print(f"  - Saved default scraper source '{default_sources[0]['display_name']}' to DB.")
     else:
-        print("WARNING: MongoDB not available, cannot initialize main config in DB.")
+        print("  - WARNING: MongoDB not available, cannot initialize configs in DB.")
 
-    print("Initializing AI service clients...")
+    print("Step 3: Initializing AI Service Clients...")
     if GOOGLE_API_KEY:
         try:
             genai.configure(api_key=GOOGLE_API_KEY)
@@ -1305,276 +1112,41 @@ def initialize_all_components(default_db="MongoDB"):
         except Exception as e:
             print(f"  - Google Gemini client init failed: {e}")
     else:
-        print("  - Google Gemini client: SKIPPED (GOOGLE_API_KEY not set).")
+        print("  - Google Gemini client: SKIPPED (API key not found).")
+    
+    if TOGETHER_API_KEY:
+        try:
+            together_client = Together(api_key=TOGETHER_API_KEY)
+            print("  - TogetherAI client configured.")
+        except Exception as e:
+            print(f"  - TogetherAI client init failed: {e}")
+    else:
+        print("  - TogetherAI client: SKIPPED (API key not found).")
 
-    # ... (other AI client inits)
+    if OPENAI_API_KEY:
+        try:
+            openai_client = OpenAI(api_key=OPENAI_API_KEY)
+            print("  - OpenAI client configured.")
+        except Exception as e:
+            print(f"  - OpenAI client init failed: {e}")
+    else:
+        print("  - OpenAI client: SKIPPED (API key not found).")
 
-    print("Initializing local RAG components...")
+    print("Step 4: Initializing Local RAG Components...")
+    print("  - Loading SentenceTransformer model 'all-MiniLM-L6-v2'. This may take a moment...")
     try:
         embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
         print(f"  - SentenceTransformer model loaded (Dimension: {embedding_model.get_sentence_embedding_dimension()}).")
         faiss_index = faiss.IndexFlatL2(embedding_model.get_sentence_embedding_dimension())
-        print("  - FAISS index initialized.")
+        print("  - FAISS index shell initialized.")
     except Exception as e:
-        print(f"  - CRITICAL ERROR loading SentenceTransformer model: {e}. RAG features disabled.")
+        print(f"  - CRITICAL ERROR loading SentenceTransformer model: {e}. RAG disabled.")
         BACKEND_INITIAL_LOAD_MSG = "Critical: Embedding model failed. RAG non-functional."
         print("--- Backend Initialization Halted ---")
         return
 
-    print("Initializing Dropbox client...")
-    initialize_dropbox_client()
-    print(f"Loading initial data from default database: '{default_db}'...")
+    print(f"Step 5: Loading initial data from default database: '{default_db}'...")
     BACKEND_INITIAL_LOAD_MSG = load_data_from_selected_db(default_db)
     
     print(f"Final DB Load Status: {BACKEND_INITIAL_LOAD_MSG}")
     print("--- Backend Initialization Complete ---")
-
-
-
-
-def get_backend_initial_load_message():
-    global BACKEND_INITIAL_LOAD_MSG
-    return BACKEND_INITIAL_LOAD_MSG
-
-
-SCRAPER_CONFIG_COLLECTION_NAME = "scraper_configurations" 
-DEFAULT_SCRAPER_PAUSE_SECONDS = 1 #
-
-# --- NEW: Scraper Configuration Backend Functions ---
-
-PREDEFINED_SCRAPER_SOURCES = [
-    {
-        "source_key": "imy_se",
-        "display_name": "IMY (Sweden)",
-        "parameters": {
-            "base_url_root": "https://www.imy.se",
-            "listing_path_segment": "tillsyner",
-            "pagination_query_format": "?query=&page=",
-            "max_pages": 5, # Default max_pages
-            "pause_seconds": DEFAULT_SCRAPER_PAUSE_SECONDS
-        }
-    },
-    {
-        "source_key": "ico_uk",
-        "display_name": "ICO (UK) - Enforcement",
-        "parameters": {
-            "base_url_root": "https://ico.org.uk",
-            "listing_path_segment": "action-weve-taken/enforcement/",
-            "pagination_query_format": "?page_num=", # Example, needs verification
-            "max_pages": 3,
-            "pause_seconds": DEFAULT_SCRAPER_PAUSE_SECONDS
-        }
-    },
-    {
-        "source_key": "dummy_source_1",
-        "display_name": "Dummy News Site",
-        "parameters": {
-            "base_url_root": "https://www.example-news.com",
-            "listing_path_segment": "articles/data-privacy",
-            "pagination_query_format": "/page/", # Example
-            "max_pages": 2,
-            "pause_seconds": DEFAULT_SCRAPER_PAUSE_SECONDS
-        }
-    }
-]
-
-def get_predefined_scraper_sources_list():
-    """Returns a deep copy of the predefined scraper sources."""
-    return json.loads(json.dumps(PREDEFINED_SCRAPER_SOURCES)) # Simple deep copy
-
-def load_scraper_config_from_db():
-    """Loads the scraper configuration list from MongoDB."""
-    global mongo_db_obj
-    if mongo_db_obj is None:
-        print("MongoDB not initialized. Cannot load scraper config.")
-        return [] # Return empty list, UI can show default message
-    try:
-        config_doc = mongo_db_obj[SCRAPER_CONFIG_COLLECTION_NAME].find_one({"_id": "active_scraper_config"})
-        if config_doc and "sources" in config_doc and isinstance(config_doc["sources"], list):
-            return config_doc["sources"]
-        return [] # No config found or malformed
-    except Exception as e:
-        print(f"Error loading scraper config from DB: {e}")
-        return []
-
-def save_scraper_config_to_db(config_sources_list: list):
-    """Saves the entire scraper configuration list to MongoDB."""
-    global mongo_db_obj
-    if mongo_db_obj is None:
-        print("MongoDB not initialized. Cannot save scraper config.")
-        return False, "Database not connected."
-    try:
-        mongo_db_obj[SCRAPER_CONFIG_COLLECTION_NAME].update_one(
-            {"_id": "active_scraper_config"},
-            {"$set": {"sources": config_sources_list, "updated_at": time.time()}},
-            upsert=True
-        )
-        return True, "Scraper configuration saved successfully."
-    except Exception as e:
-        print(f"Error saving scraper config to DB: {e}")
-        return False, f"Error saving scraper config: {e}"
-
-def get_scraper_ui_initial_data():
-    """Called by Gradio UI on load to get initial scraper tab data."""
-    predefined = get_predefined_scraper_sources_list()
-    db_config = load_scraper_config_from_db()
-    return predefined, db_config
-
-def backend_update_scraper_source_in_db(source_key_to_update: str, display_name: str, new_parameters: dict):
-    """Adds or updates a source in the DB config and saves it."""
-    current_db_config = load_scraper_config_from_db()
-    
-    found = False
-    for i, source_conf in enumerate(current_db_config):
-        if source_conf.get("source_key") == source_key_to_update:
-            current_db_config[i]["parameters"] = new_parameters
-            current_db_config[i]["display_name"] = display_name # Ensure display name is also updated
-            found = True
-            break
-    
-    if not found:
-        current_db_config.append({
-            "source_key": source_key_to_update,
-            "display_name": display_name,
-            "parameters": new_parameters
-        })
-        
-    success, msg = save_scraper_config_to_db(current_db_config)
-    if success:
-        return current_db_config, f"Source '{display_name}' updated/added: {msg}"
-    else:
-        # If save failed, return the original config from before the attempt
-        return load_scraper_config_from_db(), f"Failed to update/add '{display_name}': {msg}"
-
-
-def backend_remove_scraper_source_from_db(source_key_to_remove: str):
-    """Removes a source from the DB config and saves it."""
-    current_db_config = load_scraper_config_from_db()
-    
-    initial_len = len(current_db_config)
-    updated_db_config = [s for s in current_db_config if s.get("source_key") != source_key_to_remove]
-    
-    if len(updated_db_config) == initial_len:
-        return updated_db_config, f"Source key '{source_key_to_remove}' not found in DB config. No changes made."
-
-    success, msg = save_scraper_config_to_db(updated_db_config)
-    if success:
-        return updated_db_config, f"Source '{source_key_to_remove}' removed: {msg}"
-    else:
-        return load_scraper_config_from_db(), f"Failed to remove '{source_key_to_remove}': {msg}"
-
-
-#Config
-# --- Add this new constant near the top ---
-MAIN_CONFIG_COLLECTION_NAME = "main_app_config"
-
-# --- Add this new group of functions for Main Configuration Management ---
-
-def get_default_main_config():
-    """Returns the default structure for the main application config."""
-    # Find a default model ID if possible
-    default_model_id = None
-    if MODEL_NAME_TO_ID_MAP:
-        first_model_name = AVAILABLE_MODELS_NAMES[0]
-        # Look up its corresponding ID
-        default_model_id = MODEL_NAME_TO_ID_MAP.get(first_model_name)
-
-    return {
-        "model_config": {
-            "temperature": 0.7,
-            "top_p": 0.9,
-            "system_prompt": "You are a helpful assistant. Answer questions based on the provided context.",
-            "vary_temperature": True,
-            "vary_top_p": False,
-            "selected_models": [default_model_id] if default_model_id else []
-        },
-        "cron_schedule": "0 2 * * *", # Default: Run at 2:00 AM every day
-    }
-
-def backend_get_initial_main_config():
-    """
-    Loads the main config from the DB. If it doesn't exist, creates, saves,
-    and returns the default config. This is the primary function for loading config.
-    """
-    global mongo_db_obj
-    if mongo_db_obj is None:
-        print("MongoDB not initialized. Returning default config without saving.")
-        return get_default_main_config()
-    
-    try:
-        config_doc = mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].find_one({"_id": "singleton_config"})
-        if config_doc:
-            # Remove MongoDB's '_id' before returning to the UI state
-            config_doc.pop('_id', None)
-            return config_doc
-        else:
-            # Config doesn't exist, so create and save the default one
-            print("No main config found in DB. Creating and saving default config.")
-            default_config = get_default_main_config()
-            # The spread operator `**` unpacks the dictionary
-            mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].insert_one({
-                "_id": "singleton_config",
-                **default_config
-            })
-            return default_config
-    except Exception as e:
-        print(f"Error loading main config from DB: {e}. Returning default.")
-        return get_default_main_config()
-def backend_update_main_config(updated_config: dict):
-    """Saves the provided main configuration object to the database."""
-    global mongo_db_obj
-    if mongo_db_obj is None:
-        return False, "Database not connected. Config not saved.", updated_config
-    
-    try:
-        # Use update_one with upsert=True to either update the existing doc or create it
-        mongo_db_obj[MAIN_CONFIG_COLLECTION_NAME].update_one(
-            {"_id": "singleton_config"},
-            {"$set": updated_config},
-            upsert=True
-        )
-        return True, "Configuration saved successfully!", updated_config
-    except Exception as e:
-        print(f"Error saving main config to DB: {e}")
-        return False, f"Error saving configuration: {e}", updated_config
-
-def backend_apply_uploaded_main_config(config_file_obj):
-    """
-    Replaces the entire main config with the content of an uploaded JSON file.
-    Returns: (status_msg, success_bool, final_config_dict)
-    """
-    if config_file_obj is None:
-        return "No config file uploaded.", False, backend_get_initial_main_config()
-    try:
-        with open(config_file_obj.name, 'r', encoding='utf-8') as f:
-            new_config = json.load(f)
-        
-        # Here you could add validation to ensure the uploaded config has the right structure
-        if "model_config" not in new_config or "cron_schedule" not in new_config:
-            raise ValueError("Uploaded config is missing required keys like 'model_config' or 'cron_schedule'.")
-            
-        success, msg, final_config = backend_update_main_config(new_config)
-        if success:
-            msg = "Configuration successfully applied from uploaded file."
-        return msg, success, final_config
-    except Exception as e:
-        error_msg = f"Error applying uploaded config: {e}"
-        return error_msg, False, backend_get_initial_main_config()
-
-def backend_generate_main_config_for_download(current_main_config: dict):
-    """
-    Generates a temporary file containing the current main config for download.
-    Returns: Path to the temporary file or None on error.
-    """
-    try:
-        # Use a temporary file that Gradio can serve
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding='utf-8') as tmp_file:
-            # The current_main_config from the UI state is already a Python dict
-            json.dump(current_main_config, tmp_file, indent=2)
-            tmp_file_path = tmp_file.name
-        # Gradio's DownloadButton component needs the file path to be returned
-        return tmp_file_path
-    except Exception as e:
-        print(f"Error generating config file for download: {e}")
-        # Return None to indicate failure; the UI won't trigger a download
-        return None
