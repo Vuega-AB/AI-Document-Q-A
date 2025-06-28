@@ -1,50 +1,54 @@
 # gradio_server.py
+
 import os
 import uvicorn
 from fastapi import FastAPI
 from dotenv import load_dotenv
+import gradio as gr
 
-# Import your application's functions
+# Import only the functions needed to build the UI and the backend gatekeeper.
+# We DO NOT import or call initialize_all_components directly anymore.
 from gradio_ui import create_gradio_app
-from backend import initialize_all_components
+from backend import ensure_backend_is_initialized # If you want to prime it on first load
 
-# --- FastAPI App Setup ---
+# ==============================================================================
+#  FastAPI App Setup
+# ==============================================================================
 # Create a FastAPI app object. This will be our main entry point for the server.
 app_fastapi = FastAPI()
 
-# --- Deferred Initialization using FastAPI's startup event ---
-# This is the key to preventing deployment timeouts. The heavy ML models
-# will only load once the server is already live.
-@app_fastapi.on_event("startup")
-async def startup_event():
-    print("--- Gradio Server starting up. Triggering backend initializations... ---")
-    default_db = os.getenv("DEFAULT_DB_BACKEND", "MongoDB")
-    initialize_all_components(default_db=default_db)
-    print("--- Backend initializations complete. Gradio is ready. ---")
+# --- REMOVED: No more automatic startup initialization ---
+# The @app_fastapi.on_event("startup") block has been removed entirely.
+# This ensures the server starts instantly without loading heavy models.
 
-# --- Gradio UI Creation and Mounting ---
-print("--- Creating Gradio UI and mounting to FastAPI... ---")
+# ==============================================================================
+#  Gradio UI Creation and Mounting
+# ==============================================================================
+print("--- Creating Gradio UI object... ---")
 gradio_app_instance = create_gradio_app()
 
+print("--- Mounting Gradio UI to FastAPI at root path '/'... ---")
 # Mount the Gradio Blocks instance onto the FastAPI app.
-# This makes the Gradio UI available at the root path ("/").
 app_fastapi = gr.mount_gradio_app(
     app=app_fastapi,
     blocks=gradio_app_instance,
     path="/"
 )
-print("--- Gradio UI mounted successfully. ---")
+print("--- Gradio UI mounted successfully. Server is ready. ---")
 
 
-# This block is ONLY for running this file directly for local development
+# ==============================================================================
+#  Local Development Runner
+# ==============================================================================
+# This block is ONLY for running this file directly (e.g., `python gradio_server.py`)
 if __name__ == "__main__":
     load_dotenv()
     print("--- (Local Dev): Launching Uvicorn server for Gradio... ---")
     
-    # We call this manually for local testing because the startup event
-    # is handled by the uvicorn.run command itself.
-    # Note: If Flask is also running locally, only one process should initialize.
-    # initialize_all_components(default_db="MongoDB") 
+    # For local development, you might want to pre-load the models
+    # to simulate the user's first action immediately.
+    # To do this, you would uncomment the following line:
+    # ensure_backend_is_initialized()
     
     gradio_port = int(os.getenv("GRADIO_PORT", 7860))
     print(f"--- (Local Dev): Uvicorn will run on http://localhost:{gradio_port} ---")
