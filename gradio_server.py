@@ -1,53 +1,85 @@
+# gradio_server.py
+
 import os
-
-
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+import gradio as gr
 
-# Import the function that creates the Gradio UI
+# Import your application's functions
 from gradio_ui import create_gradio_app
-# Import the backend initialization function
-from backend import initialize_all_components
+from backend import initialize_all_components # <-- We import the main initialization function
 
-GRADIO_SERVER_INITIALIZED = False
+# ==============================================================================
+#  FastAPI App Setup
+# ==============================================================================
+# Create a FastAPI app object. This will be our main entry point for the server.
+app_fastapi = FastAPI()
 
-def run_gradio_server_initializations():
-    global GRADIO_SERVER_INITIALIZED
-    if not GRADIO_SERVER_INITIALIZED:
-        print("Running initializations for Gradio Server process...")
-        # Example: Get default DB from env or use MongoDB
-        default_db = os.getenv("DEFAULT_DB_BACKEND", "MongoDB")
-        initialize_all_components(default_db=default_db)
-        GRADIO_SERVER_INITIALIZED = True
-        print("Gradio Server initializations completed.")
-    else:
-        print("Gradio Server initializations already run.")
+# ==============================================================================
+#  CORS (Cross-Origin Resource Sharing) Configuration
+# ==============================================================================
+# This allows your Flask domain to embed the Gradio app in an iframe.
+# allowed_origin = os.getenv("FLASK_BASE_URL", "http://localhost:5000")
+
+allowed_origin = os.getenv("FLASK_BASE_URL")
+
+print(f"--- CONFIGURING CORS: Allowing origin '{allowed_origin}' for Gradio server ---")
+
+app_fastapi.add_middleware(
+    CORSMiddleware,
+    allow_origins=[allowed_origin],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ==============================================================================
+#  SERVER STARTUP INITIALIZATION
+# ==============================================================================
+# This event handler runs the initialization function ONCE when the server starts.
+# This will cause a delay during deployment while models are loaded.
+@app_fastapi.on_event("startup")
+async def startup_event():
+    print("--- FastAPI Server starting up. Triggering backend initializations... ---")
+    default_db = os.getenv("DEFAULT_DB_BACKEND", "MongoDB")
+    initialize_all_components(default_db=default_db)
+    print("--- Backend initializations complete. Gradio is ready. ---")
 
 
+# ==============================================================================
+#  Gradio UI Creation and Mounting
+# ==============================================================================
+print("--- Creating Gradio UI and mounting to FastAPI... ---")
+gradio_app_instance = create_gradio_app()
+
+# Mount the Gradio Blocks instance onto the FastAPI app.
+app_fastapi = gr.mount_gradio_app(
+    app=app_fastapi,
+    blocks=gradio_app_instance,
+    path="/"
+)
+print("--- Gradio UI mounted successfully. ---")
+
+
+# ==============================================================================
+#  Local Development Runner
+# ==============================================================================
+# This block is ONLY for running this file directly (e.g., `python gradio_server.py`)
 if __name__ == "__main__":
-    load_dotenv() # Load .env for local development; Render uses env vars
-
-    print("Starting Gradio server process...")
-    run_gradio_server_initializations() # Initialize backend components
-
-    print("Creating Gradio app object...")
-    # This 'demo' is the gr.Blocks instance returned by create_gradio_app()
-    demo = create_gradio_app()
-
-    # Get the port from the environment variable set by Render (or default for local)
+    load_dotenv()
+    print("--- (Local Dev): Launching Uvicorn server for Gradio... ---")
+    
+    # The startup_event will handle initializations when uvicorn.run is called.
+    
     gradio_port = int(os.getenv("GRADIO_PORT", 7860))
-    print(f"Attempting to launch Gradio server on 0.0.0.0:{gradio_port}...")
-
-    try:
-        demo.launch(
-            server_name="0.0.0.0",
-            server_port=gradio_port,
-            share=False,
-            inbrowser=False,
-        )
-        print(f"Gradio server successfully launched and should be listening on port {gradio_port}.")
-    except Exception as e:
-        print(f"CRITICAL ERROR: Failed to launch Gradio server on port {gradio_port}.")
-        print(f"Error details: {e}")
-        # Consider exiting if launch fails, so Render knows it's a hard failure
-        import sys
-        sys.exit(1)
+    print(f"--- (Local Dev): Uvicorn will run on http://localhost:{gradio_port} ---")
+    
+    # Run the FastAPI app using uvicorn
+    uvicorn.run(
+        "gradio_server:app_fastapi", # Points to the FastAPI object in this file
+        host="0.0.0.0",
+        port=gradio_port,
+        reload=True # Enables auto-reloading for easy development
+    )
