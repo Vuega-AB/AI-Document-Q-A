@@ -35,7 +35,9 @@ load_dotenv()
 
 APP_ADMIN_EMAIL = os.getenv("APP_ADMIN_EMAIL", "saragaballa2002@gmail.com")
 APP_ADMIN_PASSWORD = os.getenv("APP_ADMIN_PASSWORD", "11112002")
-GRADIO_APP_URL = os.getenv("GRADIO_APP_URL", "http://localhost:7860")
+# GRADIO_APP_URL = os.getenv("GRADIO_APP_URL", "http://localhost:7860")
+
+GRADIO_APP_URL = os.getenv("GRADIO_APP_URL")
 FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
 
 if not FLASK_SECRET_KEY:

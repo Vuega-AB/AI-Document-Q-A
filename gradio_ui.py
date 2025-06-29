@@ -3,6 +3,7 @@
 import gradio as gr
 import os
 import json
+from dotenv import load_dotenv
 
 # Ensure these imports point to your actual backend.py file and its functions
 from backend import (
@@ -26,8 +27,10 @@ from backend import (
     backend_update_scraper_source_in_db,
     backend_remove_scraper_source_from_db,
 )
+load_dotenv() 
+# FLASK_BASE_URL = os.getenv("FLASK_BASE_URL", "http://localhost:5000")
+FLASK_BASE_URL = os.getenv("FLASK_BASE_URL")
 
-FLASK_BASE_URL = os.getenv("FLASK_BASE_URL", "http://localhost:5000")
 
 def js_logout_function():
     flask_logout_url = f"{FLASK_BASE_URL}/logout"

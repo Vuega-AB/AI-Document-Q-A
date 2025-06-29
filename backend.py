@@ -246,6 +246,8 @@ def initialize_mongodb_client():
             mongo_client_instance = None; mongo_db_obj = None; auth_mongo_db_obj = None
     elif not MONGO_URI:
         print("Warning: MONGO_URI not set. MongoDB features disabled.")
+    # else:
+        # print("MongoDB client already initialized or MONGO_URI not set.")
 
 def initialize_dropbox_client():
     global dbx

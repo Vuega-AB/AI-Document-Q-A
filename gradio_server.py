@@ -1,5 +1,6 @@
-# gradio_server.py
 import os
+
+
 from dotenv import load_dotenv
 
 # Import the function that creates the Gradio UI
@@ -21,6 +22,7 @@ def run_gradio_server_initializations():
     else:
         print("Gradio Server initializations already run.")
 
+
 if __name__ == "__main__":
     load_dotenv() # Load .env for local development; Render uses env vars
 
@@ -31,18 +33,21 @@ if __name__ == "__main__":
     # This 'demo' is the gr.Blocks instance returned by create_gradio_app()
     demo = create_gradio_app()
 
-    # Grab Render’s port, or fall back to 7860 locally
-    port = int(os.getenv("PORT", os.getenv("GRADIO_PORT", 7860)))
-    print(f"Attempting to launch Gradio server on 0.0.0.0:{port}…")
+    # Get the port from the environment variable set by Render (or default for local)
+    gradio_port = int(os.getenv("GRADIO_PORT", 7860))
+    print(f"Attempting to launch Gradio server on 0.0.0.0:{gradio_port}...")
 
     try:
         demo.launch(
             server_name="0.0.0.0",
-            server_port=port,
+            server_port=gradio_port,
             share=False,
             inbrowser=False,
         )
-        print(f"✅ Gradio server listening on port {port}")
+        print(f"Gradio server successfully launched and should be listening on port {gradio_port}.")
     except Exception as e:
-        print(f"❌ Failed to launch on port {port}: {e}")
-        import sys; sys.exit(1)
+        print(f"CRITICAL ERROR: Failed to launch Gradio server on port {gradio_port}.")
+        print(f"Error details: {e}")
+        # Consider exiting if launch fails, so Render knows it's a hard failure
+        import sys
+        sys.exit(1)
